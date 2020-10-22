@@ -20,3 +20,6 @@ class CommonUser(models.Model):
     surrogate = models.UUIDField(default=uuid.uuid4, unique=True, db_index=True)
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     name = models.CharField(max_length=50, blank=False, null=False, default="")
+
+    def __str__(self):
+        return self.name

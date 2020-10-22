@@ -2,7 +2,7 @@ from rest_framework import viewsets, mixins, permissions, generics
 from accounts.models import User
 from instructor.models import Coach
 from posts.models import Post
-from projects.models import Project
+from projects.models import Project, Team
 from . import serializers
 
 
@@ -42,7 +42,7 @@ class ChainedPostsViewSet(generics.ListCreateAPIView, viewsets.GenericViewSet):
 
 class NewPostsViewSet(viewsets.ModelViewSet):
 
-    serializer_class = serializers.NewPostsSerializer
+    serializer_class = serializers.CoachNewPosts
 
     def get_queryset(self):
         return self.request.user.coaches.all()
@@ -56,3 +56,30 @@ class ChainPostsViewSet(generics.CreateAPIView, viewsets.GenericViewSet):
 class ProjectsViewSet(viewsets.ModelViewSet):
     queryset = Project.objects.all()
     serializer_class = serializers.ProjectSerializer
+
+
+class MyProjectsViewSet(viewsets.ModelViewSet):
+    queryset = Project.objects.all()
+    serializer_class = serializers.ProjectSerializer
+
+    def get_queryset(self):
+        return self.request.user.subscriber.projects.all()
+
+
+class MyCreatedProjectsViewSet(viewsets.ModelViewSet):
+    queryset = Project.objects.all()
+    serializer_class = serializers.ProjectSerializer
+
+    def get_queryset(self):
+        if self.request.user.coach:
+            return self.request.user.coach.created_projects.all()
+        else:
+            return Project.objects.none()
+
+
+class TeamsViewSet(viewsets.ModelViewSet):
+    serializer_class = serializers.TeamSerializer
+
+    def get_queryset(self):
+        project = self.kwargs['project_id']
+        return Team.objects.filter(project=project)

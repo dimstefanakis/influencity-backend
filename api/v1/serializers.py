@@ -2,7 +2,8 @@ from rest_framework import serializers
 from accounts.models import User
 from instructor.models import Coach
 from posts.models import Post, PostImage
-from projects.models import Project, Prerequisite, ProgressLevel
+from projects.models import Project, Prerequisite, Milestone, Team
+from subscribers.models import Subscriber
 
 
 class PostImageSerializer(serializers.ModelSerializer):
@@ -24,7 +25,9 @@ class CoachSerializer(serializers.ModelSerializer):
 
     @staticmethod
     def get_avatar(coach):
-        return coach.avatar.image.url
+        if coach.avatar:
+            return coach.avatar.image.url
+        return None
 
     class Meta:
         model = Coach
@@ -158,9 +161,9 @@ class CoachNewPosts(serializers.Serializer):
 
 
 class NewPostsSerializer(serializers.Serializer):
-    coaches = serializers.SerializerMethodField()
+    posts_per_coach = serializers.SerializerMethodField()
 
-    def get_coaches(self, coach):
+    def get_posts_per_coach(self, coach):
         return CoachNewPosts(coach).data
 
     def create(self, validated_data):
@@ -170,7 +173,7 @@ class NewPostsSerializer(serializers.Serializer):
         pass
 
     class Meta:
-        fields = ['coaches']
+        fields = ['posts_per_coach']
         read_only_fields = fields
 
 
@@ -180,15 +183,15 @@ class PrerequisiteSerializer(serializers.ModelSerializer):
         fields = ['prerequisite']
 
 
-class ProgressLevelSerializer(serializers.ModelSerializer):
+class MilestoneSerializer(serializers.ModelSerializer):
     class Meta:
-        model = ProgressLevel
+        model = Milestone
         fields = ['level']
 
 
 class ProjectSerializer(serializers.ModelSerializer):
     prerequisites = PrerequisiteSerializer(many=True)
-    progress_levels = ProgressLevelSerializer(many=True)
+    milestones = MilestoneSerializer(many=True)
     difficulty = serializers.SerializerMethodField()
 
     def get_difficulty(self, obj):
@@ -196,7 +199,7 @@ class ProjectSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Project
-        fields = ['name', 'description', 'difficulty', 'team_size', 'prerequisites', 'progress_levels']
+        fields = ['name', 'description', 'difficulty', 'team_size', 'prerequisites', 'milestones']
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -206,3 +209,16 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = ['username', 'email', 'is_coach', 'is_subscriber', 'coach']
 
+
+class SubscriberSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Subscriber
+        fields = ['name']
+
+
+class TeamSerializer(serializers.ModelSerializer):
+    members = SubscriberSerializer(many=True)
+
+    class Meta:
+        model = Team
+        fields = ['name', 'members']
