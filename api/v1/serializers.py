@@ -4,6 +4,7 @@ from instructor.models import Coach
 from posts.models import Post, PostImage
 from projects.models import Project, Prerequisite, Milestone, Team
 from subscribers.models import Subscriber
+from expertisefields.models import ExpertiseField, ExpertiseFieldAvatar
 
 
 class PostImageSerializer(serializers.ModelSerializer):
@@ -222,3 +223,24 @@ class TeamSerializer(serializers.ModelSerializer):
     class Meta:
         model = Team
         fields = ['name', 'members']
+
+
+class ExpertiseAvatarSerializer(serializers.ModelSerializer):
+    image = serializers.SerializerMethodField()
+
+    def get_image(self, expertise_avatar):
+        if expertise_avatar.image:
+            return expertise_avatar.image.url
+        return None
+
+    class Meta:
+        model = ExpertiseFieldAvatar
+        fields = ['width', 'height', 'image']
+
+
+class ExpertiseSerializer(serializers.ModelSerializer):
+    avatar = ExpertiseAvatarSerializer()
+
+    class Meta:
+        model = ExpertiseField
+        fields = ['name', 'avatar']

@@ -10,7 +10,8 @@ class ExpertiseField(models.Model):
 
 
 class ExpertiseFieldAvatar(CommonImage):
-    expertise_field = models.ForeignKey(ExpertiseField, on_delete=models.CASCADE)
+    expertise_field = models.OneToOneField(ExpertiseField, blank=True, null=True,
+                                           on_delete=models.CASCADE, related_name="avatar")
 
     def __str__(self):
         return str(self.expertise_field)

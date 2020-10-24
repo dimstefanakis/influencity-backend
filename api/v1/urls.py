@@ -17,6 +17,7 @@ router.register(r'projects/(?P<project_id>\d+)/teams', views.TeamsViewSet, basen
 router.register(r'projects', views.ProjectsViewSet)
 router.register(r'my_projects', views.MyProjectsViewSet)
 router.register(r'created_projects', views.MyCreatedProjectsViewSet)
+router.register(r'expertise_fields', views.ExpertiseViewSet)
 
 urlpatterns = [
     path('v1/', include(router.urls))

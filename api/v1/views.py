@@ -3,6 +3,7 @@ from accounts.models import User
 from instructor.models import Coach
 from posts.models import Post
 from projects.models import Project, Team
+from expertisefields.models import ExpertiseField
 from . import serializers
 
 
@@ -83,3 +84,8 @@ class TeamsViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         project = self.kwargs['project_id']
         return Team.objects.filter(project=project)
+
+
+class ExpertiseViewSet(viewsets.ModelViewSet):
+    serializer_class = serializers.ExpertiseSerializer
+    queryset = ExpertiseField.objects.all()
