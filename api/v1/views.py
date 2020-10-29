@@ -4,6 +4,7 @@ from instructor.models import Coach
 from posts.models import Post
 from projects.models import Project, Team
 from expertisefields.models import ExpertiseField
+from tiers.models import Tier
 from . import serializers
 
 
@@ -89,3 +90,10 @@ class TeamsViewSet(viewsets.ModelViewSet):
 class ExpertiseViewSet(viewsets.ModelViewSet):
     serializer_class = serializers.ExpertiseSerializer
     queryset = ExpertiseField.objects.all()
+
+
+class MyTiersViewSet(viewsets.ModelViewSet):
+    serializer_class = serializers.TierSerializer
+
+    def get_queryset(self):
+        return self.request.user.coach.tiers.all()

@@ -53,6 +53,7 @@ INSTALLED_APPS = [
     'rest_auth.registration',
     'drf_yasg',
     'smart_selects',
+    'djmoney',
     'accounts',
     'instructor',
     'subscribers',

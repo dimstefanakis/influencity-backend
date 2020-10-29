@@ -18,6 +18,7 @@ router.register(r'projects', views.ProjectsViewSet)
 router.register(r'my_projects', views.MyProjectsViewSet)
 router.register(r'created_projects', views.MyCreatedProjectsViewSet)
 router.register(r'expertise_fields', views.ExpertiseViewSet)
+router.register(r'my_tiers', views.MyTiersViewSet, basename="my_tiers")
 
 urlpatterns = [
     path('v1/', include(router.urls))

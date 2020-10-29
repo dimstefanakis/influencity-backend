@@ -5,6 +5,7 @@ from posts.models import Post, PostImage
 from projects.models import Project, Prerequisite, Milestone, Team
 from subscribers.models import Subscriber
 from expertisefields.models import ExpertiseField, ExpertiseFieldAvatar
+from tiers.models import Tier
 
 
 class PostImageSerializer(serializers.ModelSerializer):
@@ -41,7 +42,7 @@ class PostSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Post
-        fields = ['text', 'coach', 'images', 'chained_posts', 'id']
+        fields = ['text', 'coach', 'images', 'tiers', 'chained_posts', 'id']
 
     def get_fields(self):
         fields = super(PostSerializer, self).get_fields()
@@ -61,7 +62,8 @@ class PostCreateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Post
-        fields = ['text', 'images']
+        fields = ['text', 'images', 'tiers', 'id']
+        read_only_fields = ['id']
 
     def create(self, validated_data):
 
@@ -120,10 +122,10 @@ class ChainPostsSerializer(serializers.Serializer):
     post_ids = serializers.JSONField()
 
     def create(self, validated_data):
-        ids = validated_data['post_ids'].split(",")
+        ids = validated_data['post_ids']  #.split(",")
 
         # convert all string ids to integers
-        ids = list(map(lambda item: int(item), ids))
+        #ids = list(map(lambda item: int(item), ids))
 
         # get initial post to chain the rest
         main_post = Post.objects.get(pk=ids[0])
@@ -135,6 +137,8 @@ class ChainPostsSerializer(serializers.Serializer):
             if _id != ids[0]:
                 post = Post.objects.get(pk=_id)
                 main_post.chained_posts.add(post)
+
+        return {"post_ids": ids}
 
     def update(self, instance, validated_data):
         pass
@@ -244,3 +248,14 @@ class ExpertiseSerializer(serializers.ModelSerializer):
     class Meta:
         model = ExpertiseField
         fields = ['name', 'avatar']
+
+
+class TierSerializer(serializers.ModelSerializer):
+    tier = serializers.SerializerMethodField()
+
+    def get_tier(self, obj):
+        return obj.get_tier_display()
+
+    class Meta:
+        model = Tier
+        fields = ['tier', 'label', 'subheading', 'credit']
