@@ -31,20 +31,20 @@ class Project(models.Model):
 
 
 class Prerequisite(models.Model):
-    prerequisite = models.TextField()
+    description = models.TextField()
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="prerequisites")
 
     def __str__(self):
-        return self.prerequisite
+        return self.description
 
 
 class Milestone(models.Model):
-    level = models.TextField()
+    description = models.TextField()
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="milestones")
-    completed_teams = models.ForeignKey('Team', on_delete=models.CASCADE, blank=True, related_name="milestones")
+    completed_teams = models.ManyToManyField('Team', blank=True, related_name="milestones_completed")
 
     def __str__(self):
-        return self.level
+        return self.description
 
 
 class TeamImage(CommonImage):

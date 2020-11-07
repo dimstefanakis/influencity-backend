@@ -12,7 +12,12 @@ class ProjectAdmin(admin.ModelAdmin):
     filter_horizontal = ('members',)
 
 
+class MilestoneAdmin(admin.ModelAdmin):
+    model = Milestone
+    filter_horizontal = ('completed_teams',)
+
+
 admin.site.register(Project, ProjectAdmin)
-admin.site.register(Milestone)
+admin.site.register(Milestone, MilestoneAdmin)
 admin.site.register(Prerequisite)
 admin.site.register(Team, TeamAdmin)

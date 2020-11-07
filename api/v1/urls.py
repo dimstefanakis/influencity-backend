@@ -8,6 +8,7 @@ from . import views
 router = routers.DefaultRouter()
 router.register(r'user/me', views.UserMeViewSet, basename="user_me")
 router.register(r'users', views.UserViewSet)
+router.register(r'my_coaches', views.MyCoachesViewSet, basename="my_coaches")
 router.register(r'coaches', views.CoachViewSet)
 router.register(r'posts', views.PostViewSet)
 router.register(r'new_posts', views.NewPostsViewSet, basename="new_posts")
@@ -19,7 +20,9 @@ router.register(r'my_projects', views.MyProjectsViewSet)
 router.register(r'created_projects', views.MyCreatedProjectsViewSet)
 router.register(r'expertise_fields', views.ExpertiseViewSet)
 router.register(r'my_tiers', views.MyTiersViewSet, basename="my_tiers")
+router.register(r'my_teams', views.MyTeamsViewSet, basename="my_teams")
 
 urlpatterns = [
-    path('v1/', include(router.urls))
+    path('v1/', include(router.urls)),
+    path('v1/upload_video/', views.upload_video, name="upload_video")
 ]

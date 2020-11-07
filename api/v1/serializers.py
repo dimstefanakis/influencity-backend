@@ -8,6 +8,31 @@ from expertisefields.models import ExpertiseField, ExpertiseFieldAvatar
 from tiers.models import Tier
 
 
+class PrerequisiteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Prerequisite
+        fields = ['description']
+
+
+class MilestoneSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Milestone
+        fields = ['description']
+
+
+class ProjectSerializer(serializers.ModelSerializer):
+    prerequisites = PrerequisiteSerializer(many=True)
+    milestones = MilestoneSerializer(many=True)
+    difficulty = serializers.SerializerMethodField()
+
+    def get_difficulty(self, obj):
+        return obj.get_difficulty_display()
+
+    class Meta:
+        model = Project
+        fields = ['name', 'description', 'difficulty', 'team_size', 'prerequisites', 'milestones']
+
+
 class PostImageSerializer(serializers.ModelSerializer):
     image = serializers.SerializerMethodField()
 
@@ -24,6 +49,11 @@ class PostImageSerializer(serializers.ModelSerializer):
 class CoachSerializer(serializers.ModelSerializer):
     expertise_field = serializers.StringRelatedField()
     avatar = serializers.SerializerMethodField()
+    projects = serializers.SerializerMethodField()
+
+    @staticmethod
+    def get_projects(coach):
+        return ProjectSerializer(coach.created_projects.all(), many=True).data
 
     @staticmethod
     def get_avatar(coach):
@@ -33,7 +63,7 @@ class CoachSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Coach
-        fields = ['name', 'avatar', 'expertise_field']
+        fields = ['name', 'avatar', 'bio', 'expertise_field', 'projects']
 
 
 class PostSerializer(serializers.ModelSerializer):
@@ -74,8 +104,14 @@ class PostCreateSerializer(serializers.ModelSerializer):
         except KeyError:
             images = []
 
+        try:
+            tiers = validated_data.pop('tiers')
+        except KeyError:
+            tiers = []
+
         post = Post.objects.create(coach=coach, **validated_data)
         post.images.set(images)
+        post.tiers.set(tiers)
 
         return post
 
@@ -152,7 +188,7 @@ class CoachNewPosts(serializers.Serializer):
         return CoachSerializer(coach).data
 
     def get_new_posts(self, coach):
-        return PostSerializer(coach.posts.all(), many=True).data
+        return PostSerializer(coach.posts.exclude(parent_post__isnull=False), many=True).data
 
     def create(self, validated_data):
         pass
@@ -182,22 +218,21 @@ class NewPostsSerializer(serializers.Serializer):
         read_only_fields = fields
 
 
-class PrerequisiteSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Prerequisite
-        fields = ['prerequisite']
-
-
-class MilestoneSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Milestone
-        fields = ['level']
-
-
-class ProjectSerializer(serializers.ModelSerializer):
+class MyProjectsSerializer(serializers.ModelSerializer):
     prerequisites = PrerequisiteSerializer(many=True)
-    milestones = MilestoneSerializer(many=True)
     difficulty = serializers.SerializerMethodField()
+    milestones = serializers.SerializerMethodField()
+
+    def get_milestones(self, project):
+        user = self.context['request'].user
+        team = user.subscriber.teams.filter(project=project).first()
+        _milestones = []
+        completed = False
+        for milestone in project.milestones.all():
+            if team in milestone.completed_teams.all():
+                completed = True
+            _milestones.append({'description': milestone.description, 'completed': completed})
+        return _milestones
 
     def get_difficulty(self, obj):
         return obj.get_difficulty_display()
@@ -223,10 +258,20 @@ class SubscriberSerializer(serializers.ModelSerializer):
 
 class TeamSerializer(serializers.ModelSerializer):
     members = SubscriberSerializer(many=True)
+    project = serializers.StringRelatedField()
+    milestones = serializers.SerializerMethodField()
+
+    def get_milestones(self, team):
+        _milestones = []
+        completed = False
+        for milestone in team.milestones.all():
+            if milestone.completed_teams.filter(team=team).exists():
+                completed = True
+            _milestones.append({'description': milestone.description, 'completed': completed})
 
     class Meta:
         model = Team
-        fields = ['name', 'members']
+        fields = ['name', 'avatar', 'project', 'members', 'milestones']
 
 
 class ExpertiseAvatarSerializer(serializers.ModelSerializer):
@@ -251,11 +296,11 @@ class ExpertiseSerializer(serializers.ModelSerializer):
 
 
 class TierSerializer(serializers.ModelSerializer):
-    tier = serializers.SerializerMethodField()
+    tier_full = serializers.SerializerMethodField()
 
-    def get_tier(self, obj):
+    def get_tier_full(self, obj):
         return obj.get_tier_display()
 
     class Meta:
         model = Tier
-        fields = ['tier', 'label', 'subheading', 'credit']
+        fields = ['id', 'tier', 'tier_full', 'label', 'subheading', 'credit']

@@ -13,6 +13,7 @@ class Coach(CommonUser):
     avatar = models.ForeignKey(CoachAvatar, on_delete=models.CASCADE, null=True, blank=True, related_name="coach")
     subscribers = models.ManyToManyField(User, null=True, blank=True, related_name="coaches")
     expertise_field = models.ForeignKey(ExpertiseField, on_delete=models.CASCADE, null=True)
+    bio = models.CharField(max_length=160, blank=True, null=True)
 
     def __str__(self):
         return str(self.name)

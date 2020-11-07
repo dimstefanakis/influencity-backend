@@ -1,4 +1,11 @@
+import os
+import mux_python
+from mux_python.rest import ApiException
 from rest_framework import viewsets, mixins, permissions, generics
+from rest_framework.views import APIView
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.response import Response
+from django_filters import rest_framework as filters
 from accounts.models import User
 from instructor.models import Coach
 from posts.models import Post
@@ -22,9 +29,38 @@ class UserMeViewSet(mixins.ListModelMixin,
         return User.objects.filter(pk=self.request.user.pk)
 
 
+class CoachFilterSet(filters.FilterSet):
+    expertise = filters.CharFilter(field_name="expertise_field__name", lookup_expr="iexact")
+    expertise_field = filters.ModelChoiceFilter(queryset=ExpertiseField.objects.all())
+
+    class Meta:
+        model = Coach
+        fields = ['expertise_field', 'expertise']
+
+
 class CoachViewSet(viewsets.ModelViewSet):
     queryset = Coach.objects.all()
     serializer_class = serializers.CoachSerializer
+    #filterset_fields = ['expertise_field']
+    filterset_class = CoachFilterSet
+
+    def get_queryset(self):
+        """
+        Optionally restricts the returned purchases to a given user,
+        by filtering against a `username` query parameter in the URL.
+        """
+        queryset = Coach.objects.all()
+        username = self.request.query_params.get('username', None)
+        if username is not None:
+            queryset = queryset.filter(purchaser__username=username)
+        return queryset
+
+
+class MyCoachesViewSet(viewsets.ModelViewSet):
+    serializer_class = serializers.CoachSerializer
+
+    def get_queryset(self):
+        return self.request.user.coaches.all()
 
 
 class PostViewSet(viewsets.ModelViewSet):
@@ -35,6 +71,10 @@ class PostViewSet(viewsets.ModelViewSet):
         if self.action == 'create':
             return serializers.PostCreateSerializer
         return serializers.PostSerializer
+
+    def get_queryset(self):
+        # prevents chained posts from being displayed outside parent post
+        return Post.objects.exclude(parent_post__isnull=False)
 
 
 class ChainedPostsViewSet(generics.ListCreateAPIView, viewsets.GenericViewSet):
@@ -62,10 +102,15 @@ class ProjectsViewSet(viewsets.ModelViewSet):
 
 class MyProjectsViewSet(viewsets.ModelViewSet):
     queryset = Project.objects.all()
-    serializer_class = serializers.ProjectSerializer
+    serializer_class = serializers.MyProjectsSerializer
 
     def get_queryset(self):
         return self.request.user.subscriber.projects.all()
+
+    def get_serializer_context(self):
+        return {
+            'request': self.request,
+        }
 
 
 class MyCreatedProjectsViewSet(viewsets.ModelViewSet):
@@ -97,3 +142,36 @@ class MyTiersViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         return self.request.user.coach.tiers.all()
+
+
+class MyTeamsViewSet(viewsets.ModelViewSet):
+    serializer_class = serializers.TeamSerializer
+
+    def get_queryset(self):
+        return self.request.user.subscriber.teams.all()
+
+
+@api_view()
+@permission_classes((permissions.AllowAny,))
+def upload_video(request):
+    # Authentication Setup
+    configuration = mux_python.Configuration()
+    configuration.username = os.environ['MUX_TOKEN_ID']
+    configuration.password = os.environ['MUX_TOKEN_SECRET']
+
+    create_asset_request = mux_python.CreateAssetRequest(playback_policy=[mux_python.PlaybackPolicy.PUBLIC],
+                                                         mp4_support="standard")
+
+    # API Client Initialization
+    request = mux_python.CreateUploadRequest(new_asset_settings=create_asset_request, test=True)
+    direct_uploads_api = mux_python.DirectUploadsApi(mux_python.ApiClient(configuration))
+    response = direct_uploads_api.create_direct_upload(request)
+    print(response)
+    print(response.data.url)
+    # List Assets
+    print("Listing Assets: \n")
+    try:
+        pass
+    except ApiException as e:
+        print("Exception when calling AssetsApi->list_assets: %s\n" % e)
+    return Response({"url": response.data.url})
