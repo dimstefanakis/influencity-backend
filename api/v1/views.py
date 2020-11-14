@@ -8,12 +8,12 @@ from rest_framework.response import Response
 from django_filters import rest_framework as filters
 from accounts.models import User
 from instructor.models import Coach
-from posts.models import Post
+from posts.models import Post, PostVideoAssetMetaData, PostVideo
 from projects.models import Project, Team
 from expertisefields.models import ExpertiseField
 from tiers.models import Tier
 from . import serializers
-
+import uuid
 
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
@@ -60,6 +60,8 @@ class MyCoachesViewSet(viewsets.ModelViewSet):
     serializer_class = serializers.CoachSerializer
 
     def get_queryset(self):
+        if self.request.user.coach:
+            return self.request.user.coaches.exclude(user=self.request.user)
         return self.request.user.coaches.all()
 
 
@@ -151,7 +153,7 @@ class MyTeamsViewSet(viewsets.ModelViewSet):
         return self.request.user.subscriber.teams.all()
 
 
-@api_view()
+@api_view(http_method_names=['POST'])
 @permission_classes((permissions.AllowAny,))
 def upload_video(request):
     # Authentication Setup
@@ -159,19 +161,30 @@ def upload_video(request):
     configuration.username = os.environ['MUX_TOKEN_ID']
     configuration.password = os.environ['MUX_TOKEN_SECRET']
 
+    passthrough_id = str(uuid.uuid1())
+    PostVideoAssetMetaData.objects.create(passthrough=passthrough_id, post=Post.objects.get(pk=request.data['post']))
     create_asset_request = mux_python.CreateAssetRequest(playback_policy=[mux_python.PlaybackPolicy.PUBLIC],
-                                                         mp4_support="standard")
+                                                         mp4_support="standard", passthrough=passthrough_id)
 
     # API Client Initialization
     request = mux_python.CreateUploadRequest(new_asset_settings=create_asset_request, test=True)
     direct_uploads_api = mux_python.DirectUploadsApi(mux_python.ApiClient(configuration))
     response = direct_uploads_api.create_direct_upload(request)
-    print(response)
-    print(response.data.url)
-    # List Assets
-    print("Listing Assets: \n")
+
     try:
         pass
     except ApiException as e:
         print("Exception when calling AssetsApi->list_assets: %s\n" % e)
     return Response({"url": response.data.url})
+
+
+@api_view(http_method_names=['POST'])
+@permission_classes((permissions.AllowAny,))
+def upload_video_webhook(request):
+    if request.data['type'] == 'video.asset.ready':
+        passthrough = request.data['data']['passthrough']
+        playback_ids = request.data['data']['playback_ids']
+        asset_id = request.data['data']['id']
+        video_data = PostVideoAssetMetaData.objects.get(passthrough=passthrough)
+        PostVideo.objects.create(asset_id=asset_id, passthrough=video_data.passthrough, post=video_data.post)
+    return Response()

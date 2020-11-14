@@ -2,6 +2,7 @@ from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.dispatch import receiver
 from allauth.account.signals import user_signed_up
+import uuid
 
 
 class User(AbstractUser):
@@ -13,6 +14,7 @@ class User(AbstractUser):
     email = models.EmailField(unique=True, db_index=True)
     is_coach = models.BooleanField(default=False)
     is_subscriber = models.BooleanField(default=False)
+    surrogate = models.UUIDField(default=uuid.uuid4, db_index=True, unique=True)
 
 
 @receiver(user_signed_up)

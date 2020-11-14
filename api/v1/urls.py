@@ -24,5 +24,7 @@ router.register(r'my_teams', views.MyTeamsViewSet, basename="my_teams")
 
 urlpatterns = [
     path('v1/', include(router.urls)),
-    path('v1/upload_video/', views.upload_video, name="upload_video")
+    path('v1/upload_video/', views.upload_video, name="upload_video"),
+    path('v1/webhooks/upload_video_webhook/', views.upload_video_webhook, name="webhooks_upload_video")
+
 ]
