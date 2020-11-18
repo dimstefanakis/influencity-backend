@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Post, PostImage, PostVideoAssetMetaData, PostVideo
+from .models import Post, PostImage, PostVideoAssetMetaData, PostVideo, PlaybackId
 
 
 class PostAdmin(admin.ModelAdmin):
@@ -11,3 +11,4 @@ admin.site.register(Post, PostAdmin)
 admin.site.register(PostImage)
 admin.site.register(PostVideoAssetMetaData)
 admin.site.register(PostVideo)
+admin.site.register(PlaybackId)

@@ -2,18 +2,24 @@ import os
 import mux_python
 from mux_python.rest import ApiException
 from rest_framework import viewsets, mixins, permissions, generics
-from rest_framework.views import APIView
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
+from rest_framework.pagination import CursorPagination
 from django_filters import rest_framework as filters
 from accounts.models import User
 from instructor.models import Coach
-from posts.models import Post, PostVideoAssetMetaData, PostVideo
+from posts.models import Post, PostVideoAssetMetaData, PlaybackId, PostVideo
 from projects.models import Project, Team
 from expertisefields.models import ExpertiseField
-from tiers.models import Tier
+from comments.models import Comment
 from . import serializers
 import uuid
+
+
+class CommentPagination(CursorPagination):
+    page_size = 10
+    max_page_size = 100
+
 
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
@@ -153,6 +159,30 @@ class MyTeamsViewSet(viewsets.ModelViewSet):
         return self.request.user.subscriber.teams.all()
 
 
+class CommentsViewSet(viewsets.ModelViewSet):
+    serializer_class = serializers.CommentSerializer
+    pagination_class = CommentPagination
+
+    def get_serializer_class(self):
+        if self.action == 'create':
+            return serializers.CreateCommentSerializer
+        return serializers.CommentSerializer
+
+    def get_queryset(self):
+        post = self.kwargs['post_id']
+        return Post.objects.get(pk=post).comments.all()
+
+
+class CreateCommentViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin):
+    serializer_class = serializers.CreateCommentSerializer
+    pagination_class = CommentPagination
+    queryset = Comment.objects.all()
+
+    def get_serializer_context(self):
+        return {
+            'request': self.request,
+        }
+
 @api_view(http_method_names=['POST'])
 @permission_classes((permissions.AllowAny,))
 def upload_video(request):
@@ -186,5 +216,7 @@ def upload_video_webhook(request):
         playback_ids = request.data['data']['playback_ids']
         asset_id = request.data['data']['id']
         video_data = PostVideoAssetMetaData.objects.get(passthrough=passthrough)
-        PostVideo.objects.create(asset_id=asset_id, passthrough=video_data.passthrough, post=video_data.post)
+        video = PostVideo.objects.create(asset_id=asset_id, passthrough=video_data.passthrough, post=video_data.post)
+        for playback_id in playback_ids:
+            PlaybackId.objects.create(playback_id=playback_id['id'], policy=playback_id['policy'], video=video)
     return Response()

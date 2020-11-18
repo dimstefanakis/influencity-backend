@@ -20,6 +20,12 @@ class Tier(models.Model):
         (TIER2, 'Tier 2'),
         (TIER3, 'Tier 3'),
     ]
+    TIER_STRENGTH = [
+        {'tier': FREE, 'strength': 0},
+        {'tier': TIER1, 'strength': 1},
+        {'tier': TIER2, 'strength': 2},
+        {'tier': TIER3, 'strength': 3},
+    ]
     tier = models.CharField(
         max_length=2,
         choices=TIERS,

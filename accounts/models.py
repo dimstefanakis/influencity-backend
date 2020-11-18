@@ -1,4 +1,5 @@
 from django.db import models
+from django.apps import apps
 from django.contrib.auth.models import AbstractUser
 from django.dispatch import receiver
 from allauth.account.signals import user_signed_up
@@ -19,5 +20,10 @@ class User(AbstractUser):
 
 @receiver(user_signed_up)
 def user_signed_up_(request, user, **kwargs):
+    # Create a subscriber object
+    Subscriber = apps.get_model('subscribers.Subscriber')
+    Subscriber.objects.create(user=user, name=user.username)
+
+    # Update the subscriber flag as well
     user.is_subscriber = True
     user.save()
