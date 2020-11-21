@@ -12,6 +12,7 @@ from posts.models import Post, PostVideoAssetMetaData, PlaybackId, PostVideo
 from projects.models import Project, Team
 from expertisefields.models import ExpertiseField
 from comments.models import Comment
+from reacts.models import React
 from . import serializers
 import uuid
 
@@ -28,7 +29,7 @@ class UserViewSet(viewsets.ModelViewSet):
 
 class UserMeViewSet(mixins.ListModelMixin,
                     viewsets.GenericViewSet):
-    serializer_class = serializers.UserSerializer
+    serializer_class = serializers.UserMeSerializer
     permission_classes = [permissions.IsAuthenticated, ]
 
     def get_queryset(self):
@@ -70,6 +71,11 @@ class MyCoachesViewSet(viewsets.ModelViewSet):
             return self.request.user.coaches.exclude(user=self.request.user)
         return self.request.user.coaches.all()
 
+    def get_serializer_context(self):
+        return {
+            'request': self.request,
+        }
+
 
 class PostViewSet(viewsets.ModelViewSet):
     queryset = Post.objects.all()
@@ -84,6 +90,11 @@ class PostViewSet(viewsets.ModelViewSet):
         # prevents chained posts from being displayed outside parent post
         return Post.objects.exclude(parent_post__isnull=False)
 
+    def get_serializer_context(self):
+        return {
+            'request': self.request,
+        }
+
 
 class ChainedPostsViewSet(generics.ListCreateAPIView, viewsets.GenericViewSet):
     queryset = Post.objects.all()
@@ -96,6 +107,11 @@ class NewPostsViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         return self.request.user.coaches.all()
+
+    def get_serializer_context(self):
+        return {
+            'request': self.request,
+        }
 
 
 class ChainPostsViewSet(generics.CreateAPIView, viewsets.GenericViewSet):
@@ -182,6 +198,12 @@ class CreateCommentViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin):
         return {
             'request': self.request,
         }
+
+
+class ReactsViewSet(viewsets.ModelViewSet):
+    serializer_class = serializers.ReactSerializer
+    queryset = React.objects.all()
+
 
 @api_view(http_method_names=['POST'])
 @permission_classes((permissions.AllowAny,))

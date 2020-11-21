@@ -1,9 +1,11 @@
 from django.db import models
+from django.contrib.contenttypes.fields import GenericRelation
 from smart_selects.db_fields import ChainedManyToManyField
 from common.models import CommonImage
 from instructor.models import Coach
 from tiers.models import Tier
 from projects.models import Project
+from reacts.models import React
 import uuid
 
 
@@ -15,6 +17,7 @@ class Post(models.Model):
     text_html = models.TextField(blank=True, null=True)
     coach = models.ForeignKey(Coach, on_delete=models.CASCADE, related_name="posts")
     linked_project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="posts", null=True, blank=True)
+    reacts = GenericRelation(React)
     chained_posts = models.ManyToManyField('self', symmetrical=False, null=True, blank=True, related_name="parent_post")
     tiers = ChainedManyToManyField(
         Tier,

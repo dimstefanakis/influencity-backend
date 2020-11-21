@@ -23,6 +23,7 @@ router.register(r'created_projects', views.MyCreatedProjectsViewSet)
 router.register(r'expertise_fields', views.ExpertiseViewSet)
 router.register(r'my_tiers', views.MyTiersViewSet, basename="my_tiers")
 router.register(r'my_teams', views.MyTeamsViewSet, basename="my_teams")
+router.register(r'reacts', views.ReactsViewSet)
 
 urlpatterns = [
     path('v1/', include(router.urls)),

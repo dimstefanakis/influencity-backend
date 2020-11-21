@@ -60,6 +60,7 @@ INSTALLED_APPS = [
     'instructor',
     'subscribers',
     'posts',
+    'reacts',
     'comments',
     'expertisefields',
     'tiers',

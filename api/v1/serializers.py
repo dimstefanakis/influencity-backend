@@ -7,12 +7,14 @@ from comments.models import CommentImage, Comment
 from subscribers.models import Subscriber
 from expertisefields.models import ExpertiseField, ExpertiseFieldAvatar
 from tiers.models import Tier
+from reacts.models import React
 
 
 class CoachSerializer(serializers.ModelSerializer):
     expertise_field = serializers.StringRelatedField()
     avatar = serializers.SerializerMethodField()
     projects = serializers.SerializerMethodField()
+    tier = serializers.SerializerMethodField()
 
     @staticmethod
     def get_projects(coach):
@@ -24,9 +26,15 @@ class CoachSerializer(serializers.ModelSerializer):
             return coach.avatar.image.url
         return None
 
+    def get_tier(self, coach):
+        user = self.context['request'].user
+        if user.is_authenticated:
+            if user.subscriptions.filter(coach=coach).exists():
+                return user.subscriptions.filter(coach=coach).first().get_tier_display()
+
     class Meta:
         model = Coach
-        fields = ['name', 'avatar', 'bio', 'expertise_field', 'projects']
+        fields = ['name', 'avatar', 'bio', 'expertise_field', 'projects', 'tier']
 
 
 class SubscriberSerializer(serializers.ModelSerializer):
@@ -42,6 +50,26 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['username', 'email', 'is_coach', 'is_subscriber', 'coach', 'subscriber']
+
+
+class UserMeSerializer(serializers.ModelSerializer):
+    coach = CoachSerializer()
+    subscriber = SubscriberSerializer()
+    subscriber_data = serializers.SerializerMethodField()
+
+    def get_subscriber_data(self, user):
+        if not user.coach:
+            return None
+        sub_count = user.coach.subscribers.count()
+        free_sub_count = user.coach.subscribers.filter(subscriptions__tier=Tier.FREE).count()
+        tier1_sub_count = user.coach.subscribers.filter(subscriptions__tier=Tier.TIER1).count()
+        tier2_sub_count = user.coach.subscribers.filter(subscriptions__tier=Tier.TIER2).count()
+        return {'subscribers_count': sub_count, 'free_subscribers_count': free_sub_count,
+                'tier1_subscribers_count': tier1_sub_count, 'tier2_subscribers_count': tier2_sub_count}
+
+    class Meta:
+        model = User
+        fields = ['username', 'email', 'is_coach', 'is_subscriber', 'coach', 'subscriber', 'subscriber_data']
 
 
 class PrerequisiteSerializer(serializers.ModelSerializer):
@@ -96,15 +124,43 @@ class PostVideoSerializer(serializers.ModelSerializer):
         fields = ['asset_id', 'playback_ids']
 
 
+class ReactObjectRelatedField(serializers.RelatedField):
+    def to_representation(self, value):
+        if isinstance(value, Post):
+            serializer = PostSerializer(value)
+        else:
+            raise Exception('Unexpected type of tagged object')
+        return serializer.data
+
+
+class ReactSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = React
+        fields = ['type', 'user']
+
+
 class PostSerializer(serializers.ModelSerializer):
     coach = CoachSerializer()
     linked_project = ProjectSerializer()
     images = PostImageSerializer(many=True)
     videos = PostVideoSerializer(many=True)
+    reacted = serializers.SerializerMethodField()
+    #reacts = ReactSerializer()
+    reacts = serializers.SerializerMethodField()
+
+    def get_reacted(self, post):
+        user = self.context['request'].user
+        if user.reacts.filter(object_id=post.id, user=user).exists():
+            return True
+        return False
+
+    def get_reacts(self, post):
+        return post.reacts.count()
 
     class Meta:
         model = Post
-        fields = ['text', 'coach', 'images', 'videos', 'tiers', 'chained_posts', 'id', 'linked_project']
+        fields = ['text', 'coach', 'images', 'videos', 'tiers', 'chained_posts', 'id', 'linked_project', 'reacted',
+                  'reacts']
 
     def get_fields(self):
         fields = super(PostSerializer, self).get_fields()
@@ -275,6 +331,7 @@ class CommentSerializer(serializers.ModelSerializer):
 
 
 class CreateCommentSerializer(serializers.ModelSerializer):
+    user = UserSerializer(required=False)
     images = CommentImageSerializer(many=True, required=False)
 
     def create(self, validated_data):

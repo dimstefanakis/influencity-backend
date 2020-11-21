@@ -1,6 +1,7 @@
 from django.db import models
-from instructor.models import Coach
 from djmoney.models.fields import MoneyField
+from instructor.models import Coach
+from accounts.models import User
 from decimal import Decimal
 
 
@@ -36,9 +37,10 @@ class Tier(models.Model):
     label = models.CharField(max_length=20, null=True, blank=True)
     subheading = models.CharField(max_length=30, null=True, blank=True)
     coach = models.ForeignKey(Coach, on_delete=models.CASCADE, related_name="tiers")
+    subscribers = models.ManyToManyField(User, null=True, blank=True, related_name="subscriptions")
 
     def __str__(self):
-        return str(self.tier)
+        return str(self.get_tier_display())
 
     def save(self, *args, **kwargs):
         if self.tier == self.FREE:
