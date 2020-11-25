@@ -7,8 +7,8 @@ class SubscriberAvatar(CommonImage):
 
 
 class Subscriber(CommonUser):
-    avatar = models.ForeignKey(SubscriberAvatar, on_delete=models.CASCADE, null=True, blank=True,
-                               related_name="subscriber")
+    avatar = models.OneToOneField(SubscriberAvatar, on_delete=models.CASCADE, null=True, blank=True,
+                                  related_name="subscriber")
 
     def save(self, *args, **kwargs):
         # subscriber and coach operate on the same user so they should share avatars

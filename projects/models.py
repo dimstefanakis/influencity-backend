@@ -2,6 +2,7 @@ from django.db import models
 from subscribers.models import Subscriber
 from common.models import CommonImage
 from instructor.models import Coach
+from accounts.models import User
 
 
 class Project(models.Model):
@@ -45,6 +46,26 @@ class Milestone(models.Model):
 
     def __str__(self):
         return self.description
+
+
+class MilestoneCompletionReport(models.Model):
+    PENDING = 'PD'
+    ACCEPTED = 'AC'
+    REJECTED = 'RJ'
+    STATUSES = [
+        (PENDING, 'Pending'),
+        (ACCEPTED, 'Accepted'),
+        (REJECTED, 'Rejected'),
+    ]
+
+    status = models.CharField(
+        max_length=2,
+        choices=STATUSES,
+        default=PENDING,
+    )
+    milestone = models.ForeignKey(Milestone, on_delete=models.CASCADE, related_name="reports", null=True, blank=True)
+    members = models.ManyToManyField(Subscriber, related_name="milestone_reports")
+    message = models.TextField(null=True, blank=True)
 
 
 class TeamImage(CommonImage):

@@ -9,7 +9,7 @@ from django_filters import rest_framework as filters
 from accounts.models import User
 from instructor.models import Coach
 from posts.models import Post, PostVideoAssetMetaData, PlaybackId, PostVideo
-from projects.models import Project, Team
+from projects.models import Project, Team, MilestoneCompletionReport, Milestone
 from expertisefields.models import ExpertiseField
 from comments.models import Comment
 from reacts.models import React
@@ -20,6 +20,11 @@ import uuid
 class CommentPagination(CursorPagination):
     page_size = 10
     max_page_size = 100
+
+
+class PostPagination(CursorPagination):
+    page_size = 15
+    max_page_size = 30
 
 
 class UserViewSet(viewsets.ModelViewSet):
@@ -96,21 +101,34 @@ class PostViewSet(viewsets.ModelViewSet):
         }
 
 
+class CoachPostViewSet(viewsets.ModelViewSet):
+    queryset = Post.objects.all()
+    serializer_class = serializers.PostSerializer
+    pagination_class = PostPagination
+
+    def get_queryset(self):
+        surrogate = self.kwargs['surrogate']
+        return Post.objects.filter(coach__surrogate=surrogate)
+
+
 class ChainedPostsViewSet(generics.ListCreateAPIView, viewsets.GenericViewSet):
     queryset = Post.objects.all()
     serializer_class = serializers.ChainedPostsSerializer
 
 
 class NewPostsViewSet(viewsets.ModelViewSet):
-
-    serializer_class = serializers.CoachNewPosts
+    serializer_class = serializers.PostSerializer
+    pagination_class = PostPagination
 
     def get_queryset(self):
-        return self.request.user.coaches.all()
+        post_query = Post.objects.none()
+        for coach in self.request.user.coaches.all():
+            post_query |= coach.posts.exclude(parent_post__isnull=False)
+        return post_query
 
     def get_serializer_context(self):
         return {
-            'request': self.request,
+            'request': self.request
         }
 
 
@@ -203,6 +221,38 @@ class CreateCommentViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin):
 class ReactsViewSet(viewsets.ModelViewSet):
     serializer_class = serializers.ReactSerializer
     queryset = React.objects.all()
+
+
+class MilestoneCompletionReportViewSet(viewsets.ModelViewSet):
+    serializer_class = serializers.MilestoneCompletionReportSerializer
+    queryset = MilestoneCompletionReport.objects.all()
+
+    def get_queryset(self):
+        milestone = Milestone.objects.filter(id=self.kwargs['milestone_id']).first()
+        if milestone:
+            return milestone.reports.all()
+        return Milestone.objects.none()
+
+    def get_serializer_context(self):
+        return {
+            'milestone_id': self.kwargs['milestone_id'],
+        }
+
+
+@api_view(http_method_names=['PUT', 'DELETE'])
+@permission_classes((permissions.IsAuthenticated,))
+def change_or_delete_react(request, id):
+    user = request.user
+    post = Post.objects.get(pk=id)
+    react = post.reacts.filter(user=user).first()
+    if request.method == 'PUT':
+        if not react:
+            react = post.reacts.create(user=user)
+    if request.method == 'DELETE':
+        if react:
+            post.reacts.remove(react)
+    react_count = post.reacts.count()
+    return Response({'react_count': react_count})
 
 
 @api_view(http_method_names=['POST'])
