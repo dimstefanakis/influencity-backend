@@ -8,6 +8,7 @@ from subscribers.models import Subscriber
 from expertisefields.models import ExpertiseField, ExpertiseFieldAvatar
 from tiers.models import Tier
 from reacts.models import React
+from chat.models import ChatRoom, Message
 
 
 class CoachSerializer(serializers.ModelSerializer):
@@ -474,3 +475,22 @@ class TierSerializer(serializers.ModelSerializer):
     class Meta:
         model = Tier
         fields = ['id', 'tier', 'tier_full', 'label', 'subheading', 'credit']
+
+
+class ChatRoomSerializer(serializers.ModelSerializer):
+    id = serializers.SerializerMethodField()
+
+    def get_id(self, chat_room):
+        return chat_room.surrogate
+
+    class Meta:
+        model = ChatRoom
+        fields = ['id', 'name', 'type', 'members', 'project']
+
+
+class MessageSerializer(serializers.ModelSerializer):
+    user = SubscriberSerializer()
+
+    class Meta:
+        model = Message
+        fields = ['text', 'created', 'user', 'surrogate']

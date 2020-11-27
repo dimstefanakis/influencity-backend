@@ -13,8 +13,14 @@ from projects.models import Project, Team, MilestoneCompletionReport, Milestone
 from expertisefields.models import ExpertiseField
 from comments.models import Comment
 from reacts.models import React
+from chat.models import ChatRoom, Message
 from . import serializers
 import uuid
+
+
+class MessagePagination(CursorPagination):
+    page_size = 20
+    max_page_size = 100
 
 
 class CommentPagination(CursorPagination):
@@ -188,6 +194,7 @@ class MyTiersViewSet(viewsets.ModelViewSet):
 
 class MyTeamsViewSet(viewsets.ModelViewSet):
     serializer_class = serializers.TeamSerializer
+    permission_classes = [permissions.IsAuthenticated, ]
 
     def get_queryset(self):
         return self.request.user.subscriber.teams.all()
@@ -237,6 +244,21 @@ class MilestoneCompletionReportViewSet(viewsets.ModelViewSet):
         return {
             'milestone_id': self.kwargs['milestone_id'],
         }
+
+
+class MyChatRoomsViewSet(viewsets.ModelViewSet):
+    serializer_class = serializers.ChatRoomSerializer
+
+    def get_queryset(self):
+        return self.request.user.subscriber.chat_rooms.all()
+
+
+class RoomMessagesViewSet(viewsets.ModelViewSet):
+    pagination_class = MessagePagination
+    serializer_class = serializers.MessageSerializer
+
+    def get_queryset(self):
+        return ChatRoom.objects.get(surrogate=self.kwargs['surrogate']).messages.all()
 
 
 @api_view(http_method_names=['PUT', 'DELETE'])

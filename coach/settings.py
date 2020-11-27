@@ -56,6 +56,7 @@ INSTALLED_APPS = [
     'smart_selects',
     'djmoney',
     'django_filters',
+    'channels',
     'accounts',
     'instructor',
     'subscribers',
@@ -65,8 +66,11 @@ INSTALLED_APPS = [
     'expertisefields',
     'tiers',
     'projects',
+    'chat',
     'api'
 ]
+
+ASGI_APPLICATION = "coach.asgi.application"
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',

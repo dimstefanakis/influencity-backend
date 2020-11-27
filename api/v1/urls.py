@@ -26,6 +26,9 @@ router.register(r'expertise_fields', views.ExpertiseViewSet)
 router.register(r'my_tiers', views.MyTiersViewSet, basename="my_tiers")
 router.register(r'my_teams', views.MyTeamsViewSet, basename="my_teams")
 router.register(r'reacts', views.ReactsViewSet)
+router.register(r'my_chat_rooms/(?P<surrogate>[0-9a-f-]+)/messages', views.RoomMessagesViewSet,
+                basename="chat_rooms_messages")
+router.register(r'my_chat_rooms', views.MyChatRoomsViewSet, basename="my_chat_rooms")
 
 urlpatterns = [
     path('v1/', include(router.urls)),
