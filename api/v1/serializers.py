@@ -40,6 +40,10 @@ class CoachSerializer(serializers.ModelSerializer):
 
 class SubscriberSerializer(serializers.ModelSerializer):
     avatar = serializers.SerializerMethodField()
+    id = serializers.SerializerMethodField()
+
+    def get_id(self, subscriber):
+        return subscriber.surrogate
 
     @staticmethod
     def get_avatar(sub):
@@ -490,7 +494,11 @@ class ChatRoomSerializer(serializers.ModelSerializer):
 
 class MessageSerializer(serializers.ModelSerializer):
     user = SubscriberSerializer()
+    id = serializers.SerializerMethodField()
+
+    def get_id(self, message):
+        return message.surrogate
 
     class Meta:
         model = Message
-        fields = ['text', 'created', 'user', 'surrogate']
+        fields = ['text', 'created', 'user', 'id']

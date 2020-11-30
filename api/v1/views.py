@@ -187,6 +187,7 @@ class ExpertiseViewSet(viewsets.ModelViewSet):
 
 class MyTiersViewSet(viewsets.ModelViewSet):
     serializer_class = serializers.TierSerializer
+    permission_classes = [permissions.IsAuthenticated, ]
 
     def get_queryset(self):
         return self.request.user.coach.tiers.all()

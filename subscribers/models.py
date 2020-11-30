@@ -1,5 +1,6 @@
 from django.db import models
 from common.models import CommonUser, CommonImage
+from uuid import uuid4
 
 
 class SubscriberAvatar(CommonImage):
