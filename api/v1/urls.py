@@ -17,6 +17,7 @@ router.register(r'chained_posts', views.ChainedPostsViewSet, basename="create_ch
 router.register(r'chain_posts', views.ChainPostsViewSet, basename="create_post_chain")
 router.register(r'comments/create', views.CreateCommentViewSet, basename="create_comment")
 router.register(r'comments/(?P<post_id>\d+)', views.CommentsViewSet, basename="comments")
+router.register(r'comment_replies/(?P<comment_id>[0-9a-f-]+)', views.CommentRepliesViewSet, basename="comment_replies")
 router.register(r'projects/(?P<project_id>\d+)/teams', views.TeamsViewSet, basename="project_teams")
 router.register(r'projects', views.ProjectsViewSet)
 router.register(r'milestone_reports/(?P<milestone_id>\d+)', views.MilestoneCompletionReportViewSet)

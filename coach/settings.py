@@ -57,6 +57,7 @@ INSTALLED_APPS = [
     'djmoney',
     'django_filters',
     'channels',
+    'mptt',
     'accounts',
     'instructor',
     'subscribers',

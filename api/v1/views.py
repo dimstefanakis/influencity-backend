@@ -48,12 +48,13 @@ class UserMeViewSet(mixins.ListModelMixin,
 
 
 class CoachFilterSet(filters.FilterSet):
+    name = filters.CharFilter(field_name="name", lookup_expr="icontains")
     expertise = filters.CharFilter(field_name="expertise_field__name", lookup_expr="iexact")
     expertise_field = filters.ModelChoiceFilter(queryset=ExpertiseField.objects.all())
 
     class Meta:
         model = Coach
-        fields = ['expertise_field', 'expertise']
+        fields = ['expertise_field', 'expertise', 'name']
 
 
 class CoachViewSet(viewsets.ModelViewSet):
@@ -212,7 +213,8 @@ class CommentsViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         post = self.kwargs['post_id']
-        return Post.objects.get(pk=post).comments.all()
+        # get only top level comments
+        return Post.objects.get(pk=post).comments.filter(level=0)
 
 
 class CreateCommentViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin):
@@ -224,6 +226,15 @@ class CreateCommentViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin):
         return {
             'request': self.request,
         }
+
+
+class CommentRepliesViewSet(viewsets.ModelViewSet):
+    serializer_class = serializers.CommentSerializer
+    pagination_class = CommentPagination
+
+    def get_queryset(self):
+        comment = self.kwargs['comment_id']
+        return Comment.objects.get(surrogate=comment).children.all()
 
 
 class ReactsViewSet(viewsets.ModelViewSet):

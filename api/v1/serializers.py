@@ -365,17 +365,33 @@ class CommentImageSerializer(serializers.ModelSerializer):
 
 
 class CommentSerializer(serializers.ModelSerializer):
-    user = UserSerializer()
+    user = SubscriberSerializer()
     images = CommentImageSerializer(many=True)
+    id = serializers.SerializerMethodField()
+    reply_count = serializers.SerializerMethodField()
+
+    def get_id(self, comment):
+        return comment.surrogate
+
+    def get_reply_count(self, comment):
+        return Comment.objects.filter(parent=comment.id).count()
 
     class Meta:
         model = Comment
-        fields = ['text', 'images', 'user']
+        fields = ['id', 'text', 'images', 'user', 'level', 'parent', 'reply_count']
 
 
 class CreateCommentSerializer(serializers.ModelSerializer):
-    user = UserSerializer(required=False)
+    user = SubscriberSerializer(required=False)
     images = CommentImageSerializer(many=True, required=False)
+    id = serializers.SerializerMethodField(required=False)
+    parent = serializers.UUIDField(required=False)
+
+    def get_id(self, comment):
+        return comment.surrogate
+
+    def get_parent(self, comment):
+        return comment.id
 
     def create(self, validated_data):
         user = self.context['request'].user
@@ -384,15 +400,26 @@ class CreateCommentSerializer(serializers.ModelSerializer):
             images = validated_data.pop('images')
         except KeyError:
             images = []
-        comment = Comment.objects.create(user=user, **validated_data)
+
+        # check if this comment is a reply to another comment
+        try:
+            parent_id = validated_data.pop('parent')
+            parent = Comment.objects.get(surrogate=parent_id)
+        except KeyError:
+            parent = None
+
+        # if this comment is a reply to another comment get the parent posts author
+        reply_to = parent.user if parent else None
+
+        comment = Comment.objects.create(user=user.subscriber, parent=parent, reply_to=reply_to, **validated_data)
         comment.images.set(images)
 
         return comment
 
     class Meta:
         model = Comment
-        fields = ['text', 'images', 'user', 'post']
-        read_only_fields = ['user']
+        fields = ['text', 'images', 'user', 'post', 'parent', 'id', 'level']
+        read_only_fields = ['user', 'id', 'level']
 
 
 class MyProjectsSerializer(serializers.ModelSerializer):
