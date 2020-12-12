@@ -7,6 +7,7 @@ from . import views
 # (?P<username>.+)
 router = routers.DefaultRouter()
 router.register(r'user/me', views.UserMeViewSet, basename="user_me")
+router.register(r'subscriber/me', views.SubscriberMeViewSet, basename="subscriber_me")
 router.register(r'users', views.UserViewSet)
 router.register(r'my_coaches', views.MyCoachesViewSet, basename="my_coaches")
 router.register(r'coaches', views.CoachViewSet)
@@ -16,7 +17,7 @@ router.register(r'new_posts', views.NewPostsViewSet, basename="new_posts")
 router.register(r'chained_posts', views.ChainedPostsViewSet, basename="create_chained_posts")
 router.register(r'chain_posts', views.ChainPostsViewSet, basename="create_post_chain")
 router.register(r'comments/create', views.CreateCommentViewSet, basename="create_comment")
-router.register(r'comments/(?P<post_id>\d+)', views.CommentsViewSet, basename="comments")
+router.register(r'comments/(?P<post_id>[0-9a-f-]+)', views.CommentsViewSet, basename="comments")
 router.register(r'comment_replies/(?P<comment_id>[0-9a-f-]+)', views.CommentRepliesViewSet, basename="comment_replies")
 router.register(r'projects/(?P<project_id>\d+)/teams', views.TeamsViewSet, basename="project_teams")
 router.register(r'projects', views.ProjectsViewSet)
@@ -35,5 +36,5 @@ urlpatterns = [
     path('v1/', include(router.urls)),
     path('v1/upload_video/', views.upload_video, name="upload_video"),
     path('v1/webhooks/upload_video_webhook/', views.upload_video_webhook, name="webhooks_upload_video"),
-    path('v1/posts/<int:id>/change_react/', views.change_or_delete_react, name="change_or_delete_react"),
+    path('v1/posts/<uuid:id>/change_react/', views.change_or_delete_react, name="change_or_delete_react"),
 ]

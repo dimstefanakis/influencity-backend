@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Project, Milestone, Prerequisite, Team, MilestoneCompletionReport
+from .models import Project, Milestone, Prerequisite, Team, MilestoneCompletionReport, MilestoneCompletionImage
 
 
 class TeamAdmin(admin.ModelAdmin):
@@ -24,6 +24,7 @@ class MilestoneCompletionReportAdmin(admin.ModelAdmin):
 
 admin.site.register(Project, ProjectAdmin)
 admin.site.register(Milestone, MilestoneAdmin)
+admin.site.register(MilestoneCompletionImage)
 admin.site.register(Prerequisite)
 admin.site.register(Team, TeamAdmin)
 admin.site.register(MilestoneCompletionReport, MilestoneCompletionReportAdmin)

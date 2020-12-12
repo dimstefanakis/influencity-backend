@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Tier
+from .models import Tier, Benefit
 
 
 class TierAdmin(admin.ModelAdmin):
@@ -8,3 +8,4 @@ class TierAdmin(admin.ModelAdmin):
 
 
 admin.site.register(Tier, TierAdmin)
+admin.site.register(Benefit)

@@ -7,6 +7,7 @@ from rest_framework.response import Response
 from rest_framework.pagination import CursorPagination
 from django_filters import rest_framework as filters
 from accounts.models import User
+from subscribers.models import Subscriber
 from instructor.models import Coach
 from posts.models import Post, PostVideoAssetMetaData, PlaybackId, PostVideo
 from projects.models import Project, Team, MilestoneCompletionReport, Milestone
@@ -45,6 +46,20 @@ class UserMeViewSet(mixins.ListModelMixin,
 
     def get_queryset(self):
         return User.objects.filter(pk=self.request.user.pk)
+
+
+class SubscriberMeViewSet(mixins.ListModelMixin,
+                          mixins.UpdateModelMixin,
+                          viewsets.GenericViewSet):
+    permission_classes = [permissions.IsAuthenticated, ]
+
+    def get_serializer_class(self):
+        if self.action == 'update':
+            return serializers.SubscriberUpdateSerializer
+        return serializers.SubscriberSerializer
+
+    def get_queryset(self):
+        return Subscriber.objects.filter(user=self.request.user.pk)
 
 
 class CoachFilterSet(filters.FilterSet):
@@ -187,8 +202,14 @@ class ExpertiseViewSet(viewsets.ModelViewSet):
 
 
 class MyTiersViewSet(viewsets.ModelViewSet):
-    serializer_class = serializers.TierSerializer
     permission_classes = [permissions.IsAuthenticated, ]
+
+    def get_serializer_class(self):
+        print(self.action)
+        if self.action == 'update' or self.action=='partial_update':
+            return serializers.UpdateTierSerializer
+        else:
+            return serializers.TierSerializer
 
     def get_queryset(self):
         return self.request.user.coach.tiers.all()
@@ -214,7 +235,7 @@ class CommentsViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         post = self.kwargs['post_id']
         # get only top level comments
-        return Post.objects.get(pk=post).comments.filter(level=0)
+        return Post.objects.get(surrogate=post).comments.filter(level=0)
 
 
 class CreateCommentViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin):
@@ -245,6 +266,11 @@ class ReactsViewSet(viewsets.ModelViewSet):
 class MilestoneCompletionReportViewSet(viewsets.ModelViewSet):
     serializer_class = serializers.MilestoneCompletionReportSerializer
     queryset = MilestoneCompletionReport.objects.all()
+
+    def get_serializer_class(self):
+        if self.action == 'create':
+            return serializers.CreateMilestoneCompletionReportSerializer
+        return serializers.MilestoneCompletionReportSerializer
 
     def get_queryset(self):
         milestone = Milestone.objects.filter(id=self.kwargs['milestone_id']).first()
@@ -277,7 +303,7 @@ class RoomMessagesViewSet(viewsets.ModelViewSet):
 @permission_classes((permissions.IsAuthenticated,))
 def change_or_delete_react(request, id):
     user = request.user
-    post = Post.objects.get(pk=id)
+    post = Post.objects.get(surrogate=id)
     react = post.reacts.filter(user=user).first()
     if request.method == 'PUT':
         if not react:

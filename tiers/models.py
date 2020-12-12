@@ -62,3 +62,11 @@ class Tier(models.Model):
             else:
                 self.subheading = f"{self.credit}/month"
         super(Tier, self).save(*args, **kwargs)
+
+
+class Benefit(models.Model):
+    description = models.CharField(max_length=80, null=False, blank=False)
+    tier = models.ForeignKey(Tier, on_delete=models.CASCADE, null=False, blank=False, related_name="benefits")
+
+    def __str__(self):
+        return self.description

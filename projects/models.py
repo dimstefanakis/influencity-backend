@@ -3,6 +3,7 @@ from subscribers.models import Subscriber
 from common.models import CommonImage
 from instructor.models import Coach
 from accounts.models import User
+import uuid
 
 
 class Project(models.Model):
@@ -21,6 +22,7 @@ class Project(models.Model):
         default=EASY,
     )
 
+    surrogate = models.UUIDField(default=uuid.uuid4, db_index=True)
     coach = models.ForeignKey(Coach, blank=True, null=True, on_delete=models.CASCADE, related_name="created_projects")
     name = models.CharField(max_length=200, blank=False, null=False, default="")
     description = models.TextField(max_length=2000, blank=True, null=True)
@@ -66,6 +68,11 @@ class MilestoneCompletionReport(models.Model):
     milestone = models.ForeignKey(Milestone, on_delete=models.CASCADE, related_name="reports", null=True, blank=True)
     members = models.ManyToManyField(Subscriber, related_name="milestone_reports")
     message = models.TextField(null=True, blank=True)
+
+
+class MilestoneCompletionImage(CommonImage):
+    milestone_completion_report = models.ForeignKey(MilestoneCompletionReport, on_delete=models.CASCADE, null=True,
+                                                    blank=True, related_name="images")
 
 
 class TeamImage(CommonImage):

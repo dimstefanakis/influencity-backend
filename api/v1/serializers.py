@@ -2,13 +2,14 @@ from rest_framework import serializers
 from accounts.models import User
 from instructor.models import Coach
 from posts.models import Post, PostImage, PostVideo, PlaybackId
-from projects.models import Project, Prerequisite, Milestone, Team, MilestoneCompletionReport
+from projects.models import Project, Prerequisite, Milestone, Team, MilestoneCompletionReport, MilestoneCompletionImage
 from comments.models import CommentImage, Comment
-from subscribers.models import Subscriber
+from subscribers.models import Subscriber, SubscriberAvatar
 from expertisefields.models import ExpertiseField, ExpertiseFieldAvatar
-from tiers.models import Tier
+from tiers.models import Tier, Benefit
 from reacts.models import React
 from chat.models import ChatRoom, Message
+import json
 
 
 class CoachSerializer(serializers.ModelSerializer):
@@ -57,6 +58,29 @@ class SubscriberSerializer(serializers.ModelSerializer):
         read_only_fields = ['id']
 
 
+class SubscriberUpdateSerializer(serializers.ModelSerializer):
+    avatar = serializers.ImageField(required=False)
+    id = serializers.SerializerMethodField()
+
+    def get_id(self, subscriber):
+        return subscriber.surrogate
+
+    def update(self, instance, validated_data):
+        try:
+            avatar = validated_data.pop('avatar')
+            instance.avatar.image = avatar
+        except KeyError:
+            pass
+
+        instance = super(SubscriberUpdateSerializer, self).update(instance, validated_data)
+        return instance
+
+    class Meta:
+        model = Subscriber
+        fields = ['name', 'avatar', 'id']
+        read_only_fields = ['id']
+
+
 class UserSerializer(serializers.ModelSerializer):
     coach = CoachSerializer()
     subscriber = SubscriberSerializer()
@@ -92,6 +116,19 @@ class PrerequisiteSerializer(serializers.ModelSerializer):
         fields = ['description']
 
 
+class MilestoneCompletionImageSerializer(serializers.ModelSerializer):
+    image = serializers.SerializerMethodField()
+
+    def get_image(self, milestone_report):
+        if milestone_report.image:
+            return milestone_report.image.url
+        return None
+
+    class Meta:
+        model = MilestoneCompletionImage
+        fields = ['width', 'height', 'image']
+
+
 class MilestoneSerializer(serializers.ModelSerializer):
     class Meta:
         model = Milestone
@@ -99,11 +136,17 @@ class MilestoneSerializer(serializers.ModelSerializer):
         read_only_fields = ['id']
 
 
-class MilestoneCompletionReportSerializer(serializers.ModelSerializer):
-    members = SubscriberSerializer(many=True)
+class CreateMilestoneCompletionReportSerializer(serializers.ModelSerializer):
+    members = serializers.ListField(child=serializers.UUIDField(), write_only=True)
+    images = serializers.ListField(child=serializers.ImageField(), write_only=True)
 
     def create(self, validated_data):
         milestone_id = self.context['milestone_id']
+
+        try:
+            images = validated_data.pop('images')
+        except KeyError:
+            images = []
 
         try:
             members = validated_data.pop('members')
@@ -111,26 +154,45 @@ class MilestoneCompletionReportSerializer(serializers.ModelSerializer):
             members = []
 
         milestone_report = MilestoneCompletionReport.objects.create(milestone_id=milestone_id, **validated_data)
-        milestone_report.members.set(members)
+
+        for image in images:
+            MilestoneCompletionImage.objects.create(milestone_completion_report=milestone_report, image=image)
+
+        for member in members:
+            _member = Subscriber.objects.filter(surrogate=member)
+            milestone_report.members.set(_member)
         return milestone_report
 
     class Meta:
         model = MilestoneCompletionReport
-        fields = ['members', 'message', 'milestone']
+        fields = ['members', 'message', 'milestone', 'images']
         read_only_fields = ['milestone']
+
+
+class MilestoneCompletionReportSerializer(serializers.ModelSerializer):
+    members = SubscriberSerializer(many=True, required=False)
+
+    class Meta:
+        model = MilestoneCompletionReport
+        fields = ['members', 'message', 'milestone', 'images']
+        read_only_fields = fields
 
 
 class ProjectSerializer(serializers.ModelSerializer):
     prerequisites = PrerequisiteSerializer(many=True)
     milestones = MilestoneSerializer(many=True)
     difficulty = serializers.SerializerMethodField()
+    id = serializers.SerializerMethodField()
 
-    def get_difficulty(self, obj):
-        return obj.get_difficulty_display()
+    def get_id(self, project):
+        return project.surrogate
+
+    def get_difficulty(self, project):
+        return project.get_difficulty_display()
 
     class Meta:
         model = Project
-        fields = ['name', 'description', 'difficulty', 'team_size', 'prerequisites', 'milestones']
+        fields = ['name', 'description', 'difficulty', 'team_size', 'prerequisites', 'milestones', 'id']
 
 
 class PostImageSerializer(serializers.ModelSerializer):
@@ -183,6 +245,10 @@ class PostSerializer(serializers.ModelSerializer):
     reacted = serializers.SerializerMethodField()
     # reacts = ReactSerializer()
     reacts = serializers.SerializerMethodField()
+    id = serializers.SerializerMethodField()
+
+    def get_id(self, post):
+        return post.surrogate
 
     def get_reacted(self, post):
         user = self.context['request'].user
@@ -208,6 +274,10 @@ class PostNoChainSerializer(serializers.ModelSerializer):
     linked_project = ProjectSerializer()
     images = PostImageSerializer(many=True)
     videos = PostVideoSerializer(many=True)
+    id = serializers.SerializerMethodField()
+
+    def get_id(self, post):
+        return post.surrogate
 
     class Meta:
         model = Post
@@ -216,19 +286,20 @@ class PostNoChainSerializer(serializers.ModelSerializer):
 
 class PostCreateSerializer(serializers.ModelSerializer):
     coach = CoachSerializer(required=False)
+    linked_project = serializers.UUIDField(required=False)
+    id = serializers.SerializerMethodField(required=False)
+
+    def get_id(self, post):
+        return post.surrogate
 
     def get_fields(self):
         fields = super(PostCreateSerializer, self).get_fields()
         fields['chained_posts'] = PostSerializer(many=True, required=False)
         return fields
 
-    class Meta:
-        model = Post
-        fields = ['text', 'images', 'videos', 'tiers', 'id', 'linked_project', 'chained_posts', 'coach']
-        read_only_fields = ['id', 'chained_posts', 'coach', 'videos', 'reacted', 'reacts']
-
+    # FIXME
+    # This should also return the whole linked_project as a ProjectSerializer instead of just the name
     def create(self, validated_data):
-
         coach = self.context['request'].user.coach
 
         try:
@@ -241,11 +312,25 @@ class PostCreateSerializer(serializers.ModelSerializer):
         except KeyError:
             tiers = []
 
-        post = Post.objects.create(coach=coach, **validated_data)
+        try:
+            linked_project_surrogate = validated_data.pop('linked_project')
+        except KeyError:
+            linked_project_surrogate = None
+
+        linked_project = None
+        if linked_project_surrogate:
+            linked_project = Project.objects.filter(surrogate=linked_project_surrogate).first()
+
+        post = Post.objects.create(coach=coach, linked_project=linked_project, **validated_data)
         post.images.set(images)
         post.tiers.set(tiers)
 
         return post
+
+    class Meta:
+        model = Post
+        fields = ['text', 'images', 'videos', 'tiers', 'id', 'linked_project', 'chained_posts', 'coach']
+        read_only_fields = ['id', 'chained_posts', 'coach', 'videos', 'reacted', 'reacts']
 
 
 class ChainedPostsSerializer(serializers.Serializer):
@@ -296,14 +381,14 @@ class ChainPostsSerializer(serializers.Serializer):
         # ids = list(map(lambda item: int(item), ids))
 
         # get initial post to chain the rest
-        main_post = Post.objects.get(pk=ids[0])
+        main_post = Post.objects.get(surrogate=ids[0])
 
         # for each id chain it to the main_post
         for _id in ids:
 
             # ignore the first id
             if _id != ids[0]:
-                post = Post.objects.get(pk=_id)
+                post = Post.objects.get(surrogate=_id)
                 main_post.chained_posts.add(post)
 
         return {"post_ids": ids}
@@ -427,6 +512,10 @@ class MyProjectsSerializer(serializers.ModelSerializer):
     difficulty = serializers.SerializerMethodField()
     milestones = serializers.SerializerMethodField()
     my_team = serializers.SerializerMethodField()
+    id = serializers.SerializerMethodField()
+
+    def get_id(self, project):
+        return project.surrogate
 
     def get_my_team(self, project):
         user = self.context['request'].user
@@ -497,15 +586,63 @@ class ExpertiseSerializer(serializers.ModelSerializer):
         fields = ['name', 'avatar']
 
 
+class BenefitSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Benefit
+        fields = ['id', 'description']
+
+
 class TierSerializer(serializers.ModelSerializer):
     tier_full = serializers.SerializerMethodField()
+    benefits = BenefitSerializer(many=True)
 
     def get_tier_full(self, obj):
         return obj.get_tier_display()
 
     class Meta:
         model = Tier
-        fields = ['id', 'tier', 'tier_full', 'label', 'subheading', 'credit']
+        fields = ['id', 'tier', 'tier_full', 'label', 'subheading', 'credit', 'benefits']
+        read_only_fields = ['id', 'tier', 'tier_full']
+
+
+class UpdateTierSerializer(serializers.ModelSerializer):
+    tier_full = serializers.SerializerMethodField()
+    benefits = serializers.ListField(child=serializers.JSONField(), write_only=True, required=False)
+
+    def get_tier_full(self, obj):
+        return obj.get_tier_display()
+
+    def update(self, instance, validated_data):
+        try:
+            benefits = validated_data.pop('benefits')
+        except KeyError:
+            benefits = []
+
+        for benefit in benefits:
+            benefit = json.loads(benefit)
+            description = benefit.get('description')
+            benefit_id = benefit.get('id', None)
+            if benefit_id:
+                if Benefit.objects.filter(id=benefit_id).exists():
+                    update_benefit = Benefit.objects.filter(id=benefit_id).first()
+                    update_benefit.description = description
+                    update_benefit.save()
+            else:
+                Benefit.objects.create(tier=instance, description=description)
+
+        instance = super(UpdateTierSerializer, self).update(instance, validated_data)
+        return instance
+
+    def to_representation(self, instance):
+        # Since we use serializers.ListField for the benefits field the serializer won't return the
+        # benefits property of the instance. That's why we use the TierSerializer which is defined above
+        # to return the whole representation of the updated Tier
+        return TierSerializer(instance).data
+
+    class Meta:
+        model = Tier
+        fields = ['id', 'tier', 'tier_full', 'label', 'subheading', 'credit', 'benefits']
+        read_only_fields = ['id', 'tier', 'tier_full']
 
 
 class ChatRoomSerializer(serializers.ModelSerializer):
