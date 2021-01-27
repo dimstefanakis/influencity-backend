@@ -17,6 +17,7 @@ class CoachSerializer(serializers.ModelSerializer):
     avatar = serializers.SerializerMethodField()
     projects = serializers.SerializerMethodField()
     tier = serializers.SerializerMethodField()
+    tiers = serializers.SerializerMethodField()
 
     @staticmethod
     def get_projects(coach):
@@ -34,9 +35,12 @@ class CoachSerializer(serializers.ModelSerializer):
             if user.subscriptions.filter(coach=coach).exists():
                 return user.subscriptions.filter(coach=coach).first().get_tier_display()
 
+    def get_tiers(self, coach):
+        return TierSerializer(coach.tiers.all(), many=True).data
+
     class Meta:
         model = Coach
-        fields = ['name', 'avatar', 'bio', 'expertise_field', 'projects', 'tier', 'surrogate']
+        fields = ['name', 'avatar', 'bio', 'expertise_field', 'projects', 'tier', 'tiers',  'surrogate']
 
 
 class SubscriberSerializer(serializers.ModelSerializer):
@@ -138,7 +142,7 @@ class MilestoneSerializer(serializers.ModelSerializer):
 
 class CreateMilestoneCompletionReportSerializer(serializers.ModelSerializer):
     members = serializers.ListField(child=serializers.UUIDField(), write_only=True)
-    images = serializers.ListField(child=serializers.ImageField(), write_only=True)
+    images = serializers.ListField(child=serializers.ImageField(), write_only=True, required=False)
 
     def create(self, validated_data):
         milestone_id = self.context['milestone_id']
@@ -261,8 +265,8 @@ class PostSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Post
-        fields = ['text', 'coach', 'images', 'videos', 'tiers', 'chained_posts', 'id', 'linked_project', 'reacted',
-                  'reacts']
+        fields = ['status','text', 'coach', 'images', 'videos', 'tiers', 
+        'chained_posts', 'id', 'linked_project', 'reacted', 'reacts']
 
     def get_fields(self):
         fields = super(PostSerializer, self).get_fields()
@@ -281,11 +285,12 @@ class PostNoChainSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Post
-        fields = ['text', 'images', 'videos', 'id', 'linked_project']
+        fields = ['status','text', 'images', 'videos', 'id', 'linked_project']
 
 
 class PostCreateSerializer(serializers.ModelSerializer):
     coach = CoachSerializer(required=False)
+    images = serializers.ListField(child=serializers.ImageField(), write_only=True, required=False)
     linked_project = serializers.UUIDField(required=False)
     id = serializers.SerializerMethodField(required=False)
 
@@ -322,7 +327,9 @@ class PostCreateSerializer(serializers.ModelSerializer):
             linked_project = Project.objects.filter(surrogate=linked_project_surrogate).first()
 
         post = Post.objects.create(coach=coach, linked_project=linked_project, **validated_data)
-        post.images.set(images)
+        
+        for image in images:
+            PostImage.objects.create(post=post, coach=coach, image=image)
         post.tiers.set(tiers)
 
         return post
@@ -330,7 +337,7 @@ class PostCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Post
         fields = ['text', 'images', 'videos', 'tiers', 'id', 'linked_project', 'chained_posts', 'coach']
-        read_only_fields = ['id', 'chained_posts', 'coach', 'videos', 'reacted', 'reacts']
+        read_only_fields = ['id', 'chained_posts', 'coach', 'videos', 'reacted', 'reacts', 'status']
 
 
 class ChainedPostsSerializer(serializers.Serializer):
@@ -601,8 +608,8 @@ class TierSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Tier
-        fields = ['id', 'tier', 'tier_full', 'label', 'subheading', 'credit', 'benefits']
-        read_only_fields = ['id', 'tier', 'tier_full']
+        fields = ['id', 'surrogate', 'tier', 'tier_full', 'label', 'subheading', 'credit', 'benefits']
+        read_only_fields = ['id', 'surrogate', 'tier', 'tier_full']
 
 
 class UpdateTierSerializer(serializers.ModelSerializer):
@@ -647,9 +654,13 @@ class UpdateTierSerializer(serializers.ModelSerializer):
 
 class ChatRoomSerializer(serializers.ModelSerializer):
     id = serializers.SerializerMethodField()
+    project = serializers.SerializerMethodField()
 
     def get_id(self, chat_room):
         return chat_room.surrogate
+
+    def get_project(self, chat_room):
+        return chat_room.project.surrogate
 
     class Meta:
         model = ChatRoom

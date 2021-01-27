@@ -12,10 +12,11 @@ services:
     ports:
       - "6379:6379"
   coach:
+    environment:
+      - DJANGO_DEBUGGER=True
     build:
       context: .
       dockerfile: ./Dockerfile
-    command: python manage.py runserver 0.0.0.0:8000
     volumes:
       - .:/code
     ports:

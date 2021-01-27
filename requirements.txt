@@ -4,6 +4,7 @@ async-timeout==3.0.1
 attrs==20.3.0
 autobahn==20.7.1
 Automat==20.2.0
+Babel==2.9.0
 certifi==2020.11.8
 cffi==1.14.4
 channels==3.0.2
@@ -14,12 +15,16 @@ coreapi==2.3.3
 coreschema==0.0.4
 cryptography==3.2.1
 daphne==3.0.1
+debugpy==1.2.1
 defusedxml==0.6.0
+dj-database-url==0.5.0
 Django==3.0.9
 django-allauth==0.42.0
 django-environ==0.4.5
 django-filter==2.3.0
+django-js-asset==1.2.2
 django-money==1.1
+django-mptt==0.11.0
 django-rest-auth==0.9.5
 django-smart-selects==1.5.8
 djangorestframework==3.11.1
@@ -40,6 +45,7 @@ oauthlib==3.1.0
 packaging==20.4
 Pillow==7.2.0
 psycopg2==2.8.5
+ptvsd==4.1.4
 py-moneyed==0.8.0
 pyasn1==0.4.8
 pyasn1-modules==0.2.8
@@ -57,6 +63,7 @@ ruamel.yaml==0.16.12
 service-identity==18.1.0
 six==1.15.0
 sqlparse==0.4.1
+stripe==2.55.1
 Twisted==20.3.0
 txaio==20.4.1
 uritemplate==3.0.1

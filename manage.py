@@ -8,6 +8,11 @@ def main():
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'coach.settings')
     try:
         from django.core.management import execute_from_command_line
+        if os.environ.get("DJANGO_DEBUGGER", False):
+            import debugpy
+            debugpy.listen(("0.0.0.0", 5678))
+            debugpy.wait_for_client()
+
     except ImportError as exc:
         raise ImportError(
             "Couldn't import Django. Are you sure it's installed and "

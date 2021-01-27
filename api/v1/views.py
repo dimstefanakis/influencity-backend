@@ -5,12 +5,15 @@ from rest_framework import viewsets, mixins, permissions, generics
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.pagination import CursorPagination
+from rest_framework.decorators import parser_classes
+from rest_framework.parsers import MultiPartParser
 from django_filters import rest_framework as filters
 from accounts.models import User
 from subscribers.models import Subscriber
 from instructor.models import Coach
 from posts.models import Post, PostVideoAssetMetaData, PlaybackId, PostVideo
 from projects.models import Project, Team, MilestoneCompletionReport, Milestone
+from tiers.models import Tier
 from expertisefields.models import ExpertiseField
 from comments.models import Comment
 from reacts.models import React
@@ -107,9 +110,11 @@ class MyCoachesViewSet(viewsets.ModelViewSet):
 class PostViewSet(viewsets.ModelViewSet):
     queryset = Post.objects.all()
     serializer_class = serializers.PostSerializer
+    lookup_field = 'surrogate'
 
     def get_serializer_class(self):
         if self.action == 'create':
+            print(self.request.data)
             return serializers.PostCreateSerializer
         return serializers.PostSerializer
 
@@ -269,6 +274,7 @@ class MilestoneCompletionReportViewSet(viewsets.ModelViewSet):
 
     def get_serializer_class(self):
         if self.action == 'create':
+            print(self.request.data)
             return serializers.CreateMilestoneCompletionReportSerializer
         return serializers.MilestoneCompletionReportSerializer
 
@@ -299,6 +305,20 @@ class RoomMessagesViewSet(viewsets.ModelViewSet):
         return ChatRoom.objects.get(surrogate=self.kwargs['surrogate']).messages.all()
 
 
+
+@api_view(http_method_names=['POST', 'DELETE'])
+@permission_classes((permissions.IsAuthenticated,))
+def subscribe(request, id):
+    user = request.user
+    tier = Tier.objects.get(surrogate=id)
+    if request.method == 'POST':
+        tier.subscribers.add(user)
+        print(tier.subscribers.all())
+    if request.method == 'DELETE':
+        tier.subscribers.remove(user)
+    return Response({'tier': tier.surrogate})
+
+
 @api_view(http_method_names=['PUT', 'DELETE'])
 @permission_classes((permissions.IsAuthenticated,))
 def change_or_delete_react(request, id):
@@ -324,7 +344,12 @@ def upload_video(request):
     configuration.password = os.environ['MUX_TOKEN_SECRET']
 
     passthrough_id = str(uuid.uuid1())
-    PostVideoAssetMetaData.objects.create(passthrough=passthrough_id, post=Post.objects.get(pk=request.data['post']))
+    
+    # Mark post as processing while video is being processed by mux
+    post = Post.objects.get(pk=request.data['post'])
+    post.status == Post.PROCESSING
+    post.save()
+    PostVideoAssetMetaData.objects.create(passthrough=passthrough_id, post=post)
     create_asset_request = mux_python.CreateAssetRequest(playback_policy=[mux_python.PlaybackPolicy.PUBLIC],
                                                          mp4_support="standard", passthrough=passthrough_id)
 
@@ -351,4 +376,7 @@ def upload_video_webhook(request):
         video = PostVideo.objects.create(asset_id=asset_id, passthrough=video_data.passthrough, post=video_data.post)
         for playback_id in playback_ids:
             PlaybackId.objects.create(playback_id=playback_id['id'], policy=playback_id['policy'], video=video)
+        # Video is done processing by mux. Mark it as done.
+        video_data.post.status = Post.DONE
+        video_data.post.save()
     return Response()
