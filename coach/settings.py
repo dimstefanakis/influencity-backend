@@ -15,6 +15,7 @@ import sys
 import environ
 from datetime import timedelta
 from django.core.management.utils import get_random_secret_key
+import dj_database_url
 
 env = environ.Env(
     # set casting, default value
