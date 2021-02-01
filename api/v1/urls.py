@@ -7,7 +7,7 @@ from . import views
 # (?P<username>.+)
 router = routers.DefaultRouter()
 router.register(r'user/me', views.UserMeViewSet, basename="user_me")
-router.register(r'subscriber/me', views.SubscriberMeViewSet, basename="subscriber_me")
+#router.register(r'subscriber/me', views.SubscriberMeViewSet, basename="subscriber_me")
 router.register(r'users', views.UserViewSet)
 router.register(r'my_coaches', views.MyCoachesViewSet, basename="my_coaches")
 router.register(r'coaches', views.CoachViewSet)
@@ -34,6 +34,7 @@ router.register(r'my_chat_rooms', views.MyChatRoomsViewSet, basename="my_chat_ro
 
 urlpatterns = [
     path('v1/', include(router.urls)),
+    path('v1/subscriber/me/', views.subscriber_me, name="subscriber_me"),
     path('v1/subscribe/<uuid:id>', views.subscribe, name="subscribe"),
     path('v1/upload_video/', views.upload_video, name="upload_video"),
     path('v1/webhooks/upload_video_webhook/', views.upload_video_webhook, name="webhooks_upload_video"),

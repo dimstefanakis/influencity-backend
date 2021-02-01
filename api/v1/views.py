@@ -1,7 +1,8 @@
 import os
 import mux_python
 from mux_python.rest import ApiException
-from rest_framework import viewsets, mixins, permissions, generics
+from rest_framework.views import APIView
+from rest_framework import viewsets, mixins, permissions, generics, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.pagination import CursorPagination
@@ -47,13 +48,19 @@ class UserMeViewSet(mixins.ListModelMixin,
     serializer_class = serializers.UserMeSerializer
     permission_classes = [permissions.IsAuthenticated, ]
 
+    def get_serializer_class(self):
+        #UserMeNoCoachSerializer
+        user = self.get_queryset()
+        print(user.first().is_coach)
+        if user.first().is_coach:
+            return serializers.UserMeSerializer
+        return serializers.UserMeNoCoachSerializer
+
     def get_queryset(self):
         return User.objects.filter(pk=self.request.user.pk)
 
 
-class SubscriberMeViewSet(mixins.ListModelMixin,
-                          mixins.UpdateModelMixin,
-                          viewsets.GenericViewSet):
+class SubscriberMeViewSet(APIView):
     permission_classes = [permissions.IsAuthenticated, ]
 
     def get_serializer_class(self):
@@ -305,6 +312,21 @@ class RoomMessagesViewSet(viewsets.ModelViewSet):
         return ChatRoom.objects.get(surrogate=self.kwargs['surrogate']).messages.all()
 
 
+@api_view(http_method_names=['GET', 'PATCH'])
+@permission_classes((permissions.IsAuthenticated,))
+def subscriber_me(request):
+    user = request.user
+    subscriber = Subscriber.objects.filter(user=user.pk).first()
+    if request.method == 'GET':
+        serializer = serializers.SubscriberSerializer(subscriber)
+        return Response(serializers.SubscriberSerializer)
+    elif request.method == 'PATCH':
+        serializer = serializers.SubscriberUpdateSerializer(subscriber, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 @api_view(http_method_names=['POST', 'DELETE'])
 @permission_classes((permissions.IsAuthenticated,))
@@ -313,7 +335,6 @@ def subscribe(request, id):
     tier = Tier.objects.get(surrogate=id)
     if request.method == 'POST':
         tier.subscribers.add(user)
-        print(tier.subscribers.all())
     if request.method == 'DELETE':
         tier.subscribers.remove(user)
     return Response({'tier': tier.surrogate})

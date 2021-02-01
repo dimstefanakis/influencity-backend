@@ -62,6 +62,12 @@ class SubscriberSerializer(serializers.ModelSerializer):
         read_only_fields = ['id']
 
 
+class SubscriberAvatarSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SubscriberAvatar
+        fields = '__all__'
+
+
 class SubscriberUpdateSerializer(serializers.ModelSerializer):
     avatar = serializers.ImageField(required=False)
     id = serializers.SerializerMethodField()
@@ -72,7 +78,8 @@ class SubscriberUpdateSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         try:
             avatar = validated_data.pop('avatar')
-            instance.avatar.image = avatar
+            new_avatar = SubscriberAvatar.objects.create(subscriber=instance, image=avatar)
+            #instance.avatar.image = avatar
         except KeyError:
             pass
 
@@ -113,6 +120,13 @@ class UserMeSerializer(serializers.ModelSerializer):
         model = User
         fields = ['username', 'email', 'is_coach', 'is_subscriber', 'coach', 'subscriber', 'subscriber_data']
 
+
+class UserMeNoCoachSerializer(serializers.ModelSerializer):
+    subscriber = SubscriberSerializer()
+
+    class Meta:
+        model = User
+        fields = ['username', 'email', 'is_coach', 'is_subscriber', 'subscriber']
 
 class PrerequisiteSerializer(serializers.ModelSerializer):
     class Meta:
