@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from accounts.models import User
-from instructor.models import Coach
+from instructor.models import Coach, CoachApplication
 from posts.models import Post, PostImage, PostVideo, PlaybackId
 from projects.models import Project, Prerequisite, Milestone, Team, MilestoneCompletionReport, MilestoneCompletionImage
 from comments.models import CommentImage, Comment
@@ -41,6 +41,20 @@ class CoachSerializer(serializers.ModelSerializer):
     class Meta:
         model = Coach
         fields = ['name', 'avatar', 'bio', 'expertise_field', 'projects', 'tier', 'tiers',  'surrogate']
+
+
+class CoachApplicationSerializer(serializers.ModelSerializer):
+    subscriber = serializers.StringRelatedField()
+
+    def create(self, validated_data):
+        user =  self.context['request'].user
+        application = CoachApplication.objects.create(subscriber=user.subscriber, **validated_data)
+        return application
+
+    class Meta:
+        model = CoachApplication
+        fields = ['surrogate', 'subscriber', 'message']
+        read_only_fields = ['surrogate', 'subscriber']
 
 
 class SubscriberSerializer(serializers.ModelSerializer):

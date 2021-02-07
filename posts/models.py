@@ -35,6 +35,7 @@ class Post(models.Model):
         horizontal=True,
         null=True)
     status = models.CharField(max_length=2, choices=STATUS_CHOICES, default=PROCESSING)
+    
     def save(self, *args, **kwargs):
         if self.videos.count() == 0:
             # No need to process anything here, post is immidiately available

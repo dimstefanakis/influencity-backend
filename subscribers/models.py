@@ -1,4 +1,5 @@
 from django.db import models
+from django.db.models import JSONField
 from common.models import CommonUser, CommonImage
 from uuid import uuid4
 
@@ -23,3 +24,9 @@ class Subscriber(CommonUser):
         super(Subscriber, self).save(*args, **kwargs)
 
 
+class Subscription(models.Model):
+    subscriber = models.ForeignKey(Subscriber, on_delete=models.CASCADE, null=True, blank=True,
+                                   related_name="subscriber")
+    subscription_id = models.CharField(max_length=30, null=True, blank=True)
+    customer = models.CharField(max_length=30, null=True, blank=True)
+    json_data = JSONField(null=True, blank=True)

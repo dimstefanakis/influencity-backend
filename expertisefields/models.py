@@ -2,6 +2,8 @@ from django.db import models
 from common.models import CommonImage
 
 
+# TODO
+# add default other option
 class ExpertiseField(models.Model):
     name = models.CharField(max_length=100)
 

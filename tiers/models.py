@@ -7,6 +7,7 @@ import stripe
 from babel.numbers import get_currency_precision
 from instructor.models import Coach
 from accounts.models import User
+from subscribers.models import Subscription
 from decimal import Decimal
 import uuid
 
@@ -51,6 +52,7 @@ class Tier(models.Model):
     subheading = models.CharField(max_length=30, null=True, blank=True)
     coach = models.ForeignKey(Coach, on_delete=models.CASCADE, related_name="tiers")
     subscribers = models.ManyToManyField(User, null=True, blank=True, related_name="subscriptions")
+    subscriptions = models.ManyToManyField(Subscription, null=True, blank=True, related_name="subscriptions")
     product_id = models.CharField(max_length=50, null=True, blank=True)
     price_id = models.CharField(max_length=50, null=True, blank=True)
     def __str__(self):
@@ -88,7 +90,7 @@ class Benefit(models.Model):
 
 @receiver(pre_save, sender=Tier)
 def tier_updated(sender, instance, *args, **kwargs):
-    
+
     # create or change stripe Product
     if not instance.product_id:
         print(instance.credit)

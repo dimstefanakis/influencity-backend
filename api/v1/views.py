@@ -11,7 +11,7 @@ from rest_framework.parsers import MultiPartParser
 from django_filters import rest_framework as filters
 from accounts.models import User
 from subscribers.models import Subscriber
-from instructor.models import Coach
+from instructor.models import Coach, CoachApplication
 from posts.models import Post, PostVideoAssetMetaData, PlaybackId, PostVideo
 from projects.models import Project, Team, MilestoneCompletionReport, Milestone
 from tiers.models import Tier
@@ -100,11 +100,23 @@ class CoachViewSet(viewsets.ModelViewSet):
         return queryset
 
 
+class CoachApplicationViewSet(generics.CreateAPIView, 
+                              viewsets.GenericViewSet):
+    permission_classes = [permissions.IsAuthenticated, ]
+    queryset = CoachApplication.objects.all()
+    serializer_class = serializers.CoachApplicationSerializer
+
+    def get_serializer_context(self):
+        return {
+            'request': self.request,
+        }
+
 class MyCoachesViewSet(viewsets.ModelViewSet):
+    permission_classes = [permissions.IsAuthenticated, ]
     serializer_class = serializers.CoachSerializer
 
     def get_queryset(self):
-        if self.request.user.coach:
+        if self.request.user.is_coach:
             return self.request.user.coaches.exclude(user=self.request.user)
         return self.request.user.coaches.all()
 
@@ -151,6 +163,7 @@ class ChainedPostsViewSet(generics.ListCreateAPIView, viewsets.GenericViewSet):
 
 
 class NewPostsViewSet(viewsets.ModelViewSet):
+    permission_classes = [permissions.IsAuthenticated, ]
     serializer_class = serializers.PostSerializer
     pagination_class = PostPagination
 
@@ -190,6 +203,7 @@ class MyProjectsViewSet(viewsets.ModelViewSet):
 
 
 class MyCreatedProjectsViewSet(viewsets.ModelViewSet):
+    permission_classes = [permissions.IsAuthenticated, ]
     queryset = Project.objects.all()
     serializer_class = serializers.ProjectSerializer
 
@@ -217,14 +231,16 @@ class MyTiersViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated, ]
 
     def get_serializer_class(self):
-        print(self.action)
         if self.action == 'update' or self.action=='partial_update':
             return serializers.UpdateTierSerializer
         else:
             return serializers.TierSerializer
 
     def get_queryset(self):
-        return self.request.user.coach.tiers.all()
+        if self.request.user.is_coach:
+            return self.request.user.coach.tiers.all()
+        else:
+            return Tier.object.none()
 
 
 class MyTeamsViewSet(viewsets.ModelViewSet):
