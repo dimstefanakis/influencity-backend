@@ -7,10 +7,10 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.pagination import CursorPagination
 from rest_framework.decorators import parser_classes
-from rest_framework.parsers import MultiPartParser
+from rest_framework.parsers import MultiPartParser, JSONParser
 from django_filters import rest_framework as filters
 from accounts.models import User
-from subscribers.models import Subscriber
+from subscribers.models import Subscriber, Subscription
 from instructor.models import Coach, CoachApplication
 from posts.models import Post, PostVideoAssetMetaData, PlaybackId, PostVideo
 from projects.models import Project, Team, MilestoneCompletionReport, Milestone
@@ -21,6 +21,11 @@ from reacts.models import React
 from chat.models import ChatRoom, Message
 from . import serializers
 import uuid
+import stripe
+import json
+import os
+
+stripe.api_key = os.environ.get('STRIPE_SECRET_KEY')
 
 
 class MessagePagination(CursorPagination):
@@ -345,16 +350,54 @@ def subscriber_me(request):
 
 
 @api_view(http_method_names=['POST', 'DELETE'])
+@parser_classes([JSONParser])
 @permission_classes((permissions.IsAuthenticated,))
 def subscribe(request, id):
     user = request.user
     tier = Tier.objects.get(surrogate=id)
     if request.method == 'POST':
-        tier.subscribers.add(user)
+        subscription = stripe.Subscription.create(
+            customer=request.user.subscriber.customer_id,
+            items=[{
+                'price': tier.price_id,
+            }],
+        )
+
+        Subscription.objects.create(subscriber=request.user.subscriber, subscription_id=subscription.id,
+                                    customer_id=request.user.subscriber.customer_id, json_data=json.dumps(subscription),
+                                    tier=tier)
+        # tier.subscribers.add(user)
     if request.method == 'DELETE':
-        tier.subscribers.remove(user)
+        subcription = Subscription.objects.filter(subscriber=request.user.subscriber,
+                                   tier=tier).first()
+        stripe.Subscription.delete(subcription.subscription_id)
+
+        # tier.subscribers.remove(user)
     return Response({'tier': tier.surrogate})
 
+
+@api_view(http_method_names=['POST', 'DELETE'])
+@parser_classes([JSONParser])
+@permission_classes((permissions.IsAuthenticated,))
+def attach_payment_method(request):
+    user = request.user
+    if request.method == 'POST':
+        customer_id = request.user.subscriber.customer_id
+        
+        # attach the payment method to the customer
+        payment_method = stripe.PaymentMethod.attach(
+            request.data['id'],
+            customer=customer_id,
+        )
+
+        # then modify the customer object to use the above payment method as the default
+        stripe.Customer.modify(
+            request.user.subscriber.customer_id,
+            invoice_settings={"default_payment_method": payment_method.id},
+        )
+        return Response({'payment_id': payment_method.id})
+    if request.method == 'DELETE':
+        return Response({'payment_id': None})
 
 @api_view(http_method_names=['PUT', 'DELETE'])
 @permission_classes((permissions.IsAuthenticated,))
@@ -417,3 +460,11 @@ def upload_video_webhook(request):
         video_data.post.status = Post.DONE
         video_data.post.save()
     return Response()
+
+
+@api_view(http_method_names=['POST'])
+@permission_classes((permissions.IsAuthenticated,))
+def get_stripe_login(request):
+    stripe.api_key = os.environ.get('STRIPE_SECRET_KEY')
+    login = stripe.Account.create_login_link(f'{request.user.coach.stripe_id}')
+    return Response({'url': login.url})

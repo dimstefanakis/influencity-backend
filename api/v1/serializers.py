@@ -9,9 +9,18 @@ from expertisefields.models import ExpertiseField, ExpertiseFieldAvatar
 from tiers.models import Tier, Benefit
 from reacts.models import React
 from chat.models import ChatRoom, Message
+from babel.numbers import get_currency_precision
+import stripe
 import json
+import os
 
-
+stripe.api_key = os.environ.get('STRIPE_SECRET_KEY')
+def money_to_integer(money):
+    return int(
+        money.amount * (
+            10 ** get_currency_precision(money.currency.code)
+        )
+    )
 class CoachSerializer(serializers.ModelSerializer):
     expertise_field = serializers.StringRelatedField()
     avatar = serializers.SerializerMethodField()
@@ -664,6 +673,19 @@ class UpdateTierSerializer(serializers.ModelSerializer):
                     update_benefit.save()
             else:
                 Benefit.objects.create(tier=instance, description=description)
+
+        try:
+            credit = validated_data.pop('credit')
+            if instance.credit != credit:
+                price = stripe.Price.create(
+                    unit_amount=money_to_integer(credit),
+                    currency=credit.currency.code.lower(),
+                    recurring={"interval": "month"},
+                    product=instance.product_id,
+                )
+                instance.price_id = price.id
+        except KeyError:
+            pass
 
         instance = super(UpdateTierSerializer, self).update(instance, validated_data)
         return instance

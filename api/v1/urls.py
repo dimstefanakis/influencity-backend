@@ -37,6 +37,7 @@ urlpatterns = [
     path('v1/', include(router.urls)),
     path('v1/subscriber/me/', views.subscriber_me, name="subscriber_me"),
     path('v1/subscribe/<uuid:id>', views.subscribe, name="subscribe"),
+    path('v1/attach_payment_method/', views.attach_payment_method, name="attach_payment_method"),
     path('v1/upload_video/', views.upload_video, name="upload_video"),
     path('v1/webhooks/upload_video_webhook/', views.upload_video_webhook, name="webhooks_upload_video"),
     path('v1/posts/<uuid:id>/change_react/', views.change_or_delete_react, name="change_or_delete_react"),

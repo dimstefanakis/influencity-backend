@@ -1,7 +1,7 @@
 import os
 from django.dispatch import receiver
 from django.db import models
-from django.db.models.signals import pre_save
+from django.db.models.signals import pre_save, post_save
 from djmoney.models.fields import MoneyField
 import stripe
 from babel.numbers import get_currency_precision
@@ -27,18 +27,15 @@ class Tier(models.Model):
     FREE = 'FR'
     TIER1 = 'T1'
     TIER2 = 'T2'
-    TIER3 = 'T3'
     TIERS = [
         (FREE, 'Free'),
         (TIER1, 'Tier 1'),
         (TIER2, 'Tier 2'),
-        (TIER3, 'Tier 3'),
     ]
     TIER_STRENGTH = [
         {'tier': FREE, 'strength': 0},
         {'tier': TIER1, 'strength': 1},
         {'tier': TIER2, 'strength': 2},
-        {'tier': TIER3, 'strength': 3},
     ]
     tier = models.CharField(
         max_length=2,
@@ -52,7 +49,7 @@ class Tier(models.Model):
     subheading = models.CharField(max_length=30, null=True, blank=True)
     coach = models.ForeignKey(Coach, on_delete=models.CASCADE, related_name="tiers")
     subscribers = models.ManyToManyField(User, null=True, blank=True, related_name="subscriptions")
-    subscriptions = models.ManyToManyField(Subscription, null=True, blank=True, related_name="subscriptions")
+    #subscriptions = models.ManyToManyField(Subscription, null=True, blank=True, related_name="subscriptions")
     product_id = models.CharField(max_length=50, null=True, blank=True)
     price_id = models.CharField(max_length=50, null=True, blank=True)
     def __str__(self):
@@ -63,14 +60,16 @@ class Tier(models.Model):
             self.credit = Decimal("0.00")
         elif self.tier == self.TIER1:
             self.credit = Decimal("5.00")
+        else:
+            # Set the default premium pricing to 10
+            if not self.credit:
+                self.credit = Decimal("10.00")
         if not self.label:
             if self.tier == self.FREE:
                 self.label = 'Free'
             elif self.tier == self.TIER1:
-                self.label = 'Casual'
-            elif self.tier == self.TIER2:
                 self.label = 'Basic'
-            elif self.tier == self.TIER3:
+            elif self.tier == self.TIER2:
                 self.label = 'Premium'
         if not self.subheading:
             if self.tier == self.FREE:
@@ -111,10 +110,11 @@ def tier_updated(sender, instance, *args, **kwargs):
             product=instance.product_id,
         )
         instance.price_id = price.id
-    else:
-        stripe.Price.modify(
-            unit_amount=money_to_integer(instance.credit),
-            currency=instance.credit.currency.code.lower(),
-            recurring={"interval": "month"},
-            product=instance.product_id,
-        )
+
+
+@receiver(post_save, sender=Coach)
+def create_tiers(sender, instance, created, **kwargs):
+    if created:
+        Tier.objects.create(coach=instance, tier=Tier.FREE)
+        Tier.objects.create(coach=instance, tier=Tier.TIER1)
+        Tier.objects.create(coach=instance, tier=Tier.TIER2)
