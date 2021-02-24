@@ -75,6 +75,23 @@ class MilestoneCompletionImage(CommonImage):
                                                     blank=True, related_name="images")
 
 
+class MilestoneCompletionVideoAssetMetaData(models.Model):
+    passthrough = models.UUIDField(default=uuid.uuid1)
+    milestone_completion_report = models.ForeignKey(MilestoneCompletionReport, on_delete=models.CASCADE)
+
+
+class MilestoneCompletionVideo(models.Model):
+    passthrough = models.UUIDField(default=uuid.uuid1)
+    milestone_completion_report = models.ForeignKey(MilestoneCompletionReport, on_delete=models.CASCADE, related_name="videos")
+    asset_id = models.CharField(max_length=120)
+
+
+class MilestoneCompletionPlaybackId(models.Model):
+    policy = models.CharField(max_length=30)
+    playback_id = models.CharField(max_length=100)
+    video = models.ForeignKey(MilestoneCompletionVideo, on_delete=models.CASCADE, related_name="playback_ids")
+
+
 class TeamImage(CommonImage):
     pass
 

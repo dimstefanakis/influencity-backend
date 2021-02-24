@@ -21,6 +21,7 @@ def money_to_integer(money):
             10 ** get_currency_precision(money.currency.code)
         )
     )
+
 class CoachSerializer(serializers.ModelSerializer):
     expertise_field = serializers.StringRelatedField()
     avatar = serializers.SerializerMethodField()
@@ -49,7 +50,8 @@ class CoachSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Coach
-        fields = ['name', 'avatar', 'bio', 'expertise_field', 'projects', 'tier', 'tiers',  'surrogate']
+        fields = ['name', 'avatar', 'bio', 'expertise_field', 'projects', 
+                'tier', 'tiers', 'surrogate', 'charges_enabled']
 
 
 class CoachApplicationSerializer(serializers.ModelSerializer):
@@ -234,6 +236,53 @@ class ProjectSerializer(serializers.ModelSerializer):
     class Meta:
         model = Project
         fields = ['name', 'description', 'difficulty', 'team_size', 'prerequisites', 'milestones', 'id']
+
+
+class CreateProjectSerializer(serializers.ModelSerializer):
+    # the below 2 contain a list of descriptions for both prerequisites and milestones
+    prerequisites = serializers.ListField(child=serializers.CharField(), write_only=True, required=False)
+    milestones = serializers.ListField(child=serializers.CharField(), write_only=True, required=False)
+    attached_posts = serializers.ListField(child=serializers.UUIDField(), write_only=True, required=False)
+
+    def create(self, validated_data):
+        coach = self.context['request'].user.coach
+
+        try:
+            prerequisites = validated_data.pop('prerequisites')
+        except KeyError:
+            prerequisites = []
+
+        try:
+            milestones = validated_data.pop('milestones')
+        except KeyError:
+            milestones = []
+
+        try:
+            attached_posts = validated_data.pop('attached_posts')
+        except KeyError:
+            attached_posts = []
+
+        project = Project.objects.create(coach=coach, **validated_data)
+
+        # alternatively instead of iterating create a queryset from the 'attached_posts' and 
+        # add it to the linked_project using the asterisk notation
+        for post_id in attached_posts:
+            post = Post.objects.get(surrogate=post_id)
+            post.linked_project = project
+            post.save()
+
+        for prerequisite in prerequisites:
+            Prerequisite.objects.create(description=prerequisite, project=project)
+
+        for milestone in milestones:
+            Milestone.objects.create(description=milestone, project=project)
+        
+        return project
+
+    class Meta:
+        model = Project
+        fields = ['name', 'description', 'difficulty', 'team_size', 'prerequisites', 'milestones', 'attached_posts', 'id']
+        read_only_fields = ['id']
 
 
 class PostImageSerializer(serializers.ModelSerializer):
@@ -565,7 +614,7 @@ class MyProjectsSerializer(serializers.ModelSerializer):
         user = self.context['request'].user
         if user:
             team = user.subscriber.teams.filter(project=project).first()
-            return TeamSerializer(team).data
+            return MyTeamsSerializer(team).data
         return None
 
     def get_milestones(self, project):
@@ -600,13 +649,47 @@ class MyProjectsSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'my_team']
 
 
-class TeamSerializer(serializers.ModelSerializer):
+class MyTeamsSerializer(serializers.ModelSerializer):
     members = SubscriberSerializer(many=True)
     project = serializers.StringRelatedField()
 
     class Meta:
         model = Team
         fields = ['name', 'avatar', 'project', 'members']
+
+
+class TeamSerializer(serializers.ModelSerializer):
+    members = SubscriberSerializer(many=True)
+    project = serializers.StringRelatedField()
+    milestones = serializers.SerializerMethodField()
+
+    def get_milestones(self, team):
+        user = self.context['request'].user
+        project = self.context['project']
+        #team = user.subscriber.teams.filter(project=project).first()
+        _milestones = []
+
+        for milestone in project.milestones.all():
+            completed = False
+            reports = milestone.reports.all()
+            if team in milestone.completed_teams.all():
+                completed = True
+            status = None
+            if reports.filter(status=MilestoneCompletionReport.ACCEPTED).exists():
+                status = 'accepted'
+            elif reports.filter(status=MilestoneCompletionReport.REJECTED).exists():
+                status = 'rejected'
+            elif reports.filter(status=MilestoneCompletionReport.PENDING).exists():
+                status = 'pending'
+
+            _milestones.append({'description': milestone.description, 'completed': completed,
+                                'status': status, 'id': milestone.id,
+                                'reports': MilestoneCompletionReportSerializer(reports, many=True).data})
+        return _milestones
+
+    class Meta:
+        model = Team
+        fields = ['name', 'avatar', 'project', 'members', 'milestones']
 
 
 class ExpertiseAvatarSerializer(serializers.ModelSerializer):

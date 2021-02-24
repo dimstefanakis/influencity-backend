@@ -1,6 +1,10 @@
 import os
 import mux_python
 from mux_python.rest import ApiException
+from django.contrib.sites.models import Site
+from django.conf import settings
+from django.http import HttpResponse
+from django.views.decorators.csrf import csrf_exempt
 from rest_framework.views import APIView
 from rest_framework import viewsets, mixins, permissions, generics, status
 from rest_framework.decorators import api_view, permission_classes
@@ -191,7 +195,11 @@ class ChainPostsViewSet(generics.CreateAPIView, viewsets.GenericViewSet):
 
 class ProjectsViewSet(viewsets.ModelViewSet):
     queryset = Project.objects.all()
-    serializer_class = serializers.ProjectSerializer
+
+    def get_serializer_class(self):
+        if self.action=='create':
+            return serializers.CreateProjectSerializer
+        return serializers.ProjectSerializer
 
 
 class MyProjectsViewSet(viewsets.ModelViewSet):
@@ -224,8 +232,14 @@ class TeamsViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         project = self.kwargs['project_id']
-        return Team.objects.filter(project=project)
+        return Team.objects.filter(project__surrogate=project)
 
+    def get_serializer_context(self):
+        project = Project.objects.get(surrogate=self.kwargs['project_id'])
+        return {
+            'request': self.request,
+            'project': project
+        }
 
 class ExpertiseViewSet(viewsets.ModelViewSet):
     serializer_class = serializers.ExpertiseSerializer
@@ -249,7 +263,7 @@ class MyTiersViewSet(viewsets.ModelViewSet):
 
 
 class MyTeamsViewSet(viewsets.ModelViewSet):
-    serializer_class = serializers.TeamSerializer
+    serializer_class = serializers.MyTeamsSerializer
     permission_classes = [permissions.IsAuthenticated, ]
 
     def get_queryset(self):
@@ -462,9 +476,78 @@ def upload_video_webhook(request):
     return Response()
 
 
-@api_view(http_method_names=['POST'])
+@api_view(http_method_names=['GET'])
 @permission_classes((permissions.IsAuthenticated,))
 def get_stripe_login(request):
     stripe.api_key = os.environ.get('STRIPE_SECRET_KEY')
     login = stripe.Account.create_login_link(f'{request.user.coach.stripe_id}')
     return Response({'url': login.url})
+
+
+@api_view(http_method_names=['GET'])
+@permission_classes((permissions.IsAuthenticated,))
+def create_stripe_account_link(request):
+    stripe.api_key = os.environ.get('STRIPE_SECRET_KEY')
+    coach = request.user.coach
+
+    if settings.DEBUG:
+        redirect = 'http://localhost:3000/users/oauth/callback'
+        refresh_url = "http://localhost:3000/reauth"
+
+    else:
+        redirect = 'https://%s%s' % (Site.objects.get_current().domain, '/users/oauth/callback')
+        refresh_url = 'https://%s%s' % (Site.objects.get_current().domain, '/reauth')
+
+    account_link = stripe.AccountLink.create(
+        account=request.user.coach.stripe_id,
+        refresh_url=refresh_url,
+        return_url=redirect,
+        type="account_onboarding",
+    )
+
+    coach.stripe_account_link = account_link.url
+    coach.stripe_created = account_link.created
+    coach.stripe_expires_at = account_link.expires_at
+    coach.save()
+    return Response({'url': account_link.url})
+
+
+@api_view(http_method_names=['GET'])
+@permission_classes((permissions.IsAuthenticated,))
+def get_stripe_balance(request):
+    balance = stripe.Balance.retrieve(
+        stripe_account=request.user.coach.stripe_id
+    )
+    print(balance)
+    return Response({'balance': balance['available'][0]['amount']})
+
+
+@csrf_exempt
+def stripe_webook(request):
+    payload = request.body
+    sig_header = request.META['HTTP_STRIPE_SIGNATURE']
+    event = None
+
+    try:
+        event = stripe.Webhook.construct_event(
+          payload, sig_header, os.environ.get('STRIPE_ENDPOINT_SECRET')
+        )
+    except ValueError as e:
+        # Invalid payload
+        return HttpResponse(status=400)
+    except stripe.error.SignatureVerificationError as e:
+        # Invalid signature
+        return HttpResponse(status=400)
+
+    if event.type == 'payment_method.attached':
+        payment_method = event.data.object # contains a stripe.PaymentMethod
+    elif event.type == 'account.updated':
+        account = event.data.object
+        charges_enabled = account.get('charges_enabled', '')
+        coach = Coach.objects.get(stripe_id=account.get('id', ''))
+
+        coach.charges_enabled = charges_enabled
+        coach.save()
+    else:
+        print('Unhandled event type {}'.format(event.type))
+    return HttpResponse(status=200)

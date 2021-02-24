@@ -75,34 +75,34 @@ class CoachApplication(models.Model):
 
 
 @receiver(pre_save, sender=Coach)
-def setup_stripe_account(sender, instance, created, **kwargs):
+def setup_stripe_account(sender, instance, *args, **kwargs):
 
-    account = stripe.Account.create(
-        type="express",
-        country="GR",
-        email=instance.user.email,
-        capabilities={
-            "card_payments": {"requested": True},
-            "transfers": {"requested": True},
-        },
-    )
+    if not instance.stripe_id:
+        account = stripe.Account.create(
+            type="express",
+            country="GR",
+            email=instance.user.email,
+            capabilities={
+                "card_payments": {"requested": True},
+                "transfers": {"requested": True},
+            },
+        )
 
-    if settings.DEBUG:
-        redirect = 'http://localhost:3000/users/oauth/callback'
-        refresh_url = "http://localhost:3000/reauth"
-    else:
-        redirect = 'https://%s%s' % (Site.objects.get_current().domain, '/users/oauth/callback')
-        refresh_url = 'https://%s%s' % (Site.objects.get_current().domain, '/reauth')
+        if settings.DEBUG:
+            redirect = 'http://localhost:3000/users/oauth/callback'
+            refresh_url = "http://localhost:3000/reauth"
+        else:
+            redirect = 'https://%s%s' % (Site.objects.get_current().domain, '/users/oauth/callback')
+            refresh_url = 'https://%s%s' % (Site.objects.get_current().domain, '/reauth')
 
-    account_link = stripe.AccountLink.create(
-        account=account.id,
-        refresh_url=refresh_url,
-        return_url=redirect,
-        type="account_onboarding",
-    )
+        account_link = stripe.AccountLink.create(
+            account=account.id,
+            refresh_url=refresh_url,
+            return_url=redirect,
+            type="account_onboarding",
+        )
 
-    instance.stripe_id = account.id
-    instance.stripe_account_link = account_link.url
-    instance.stripe_created = account_link.created
-    instance.stripe_expires_at = account_link.expires_at
-    instance.save()
+        instance.stripe_id = account.id
+        instance.stripe_account_link = account_link.url
+        instance.stripe_created = account_link.created
+        instance.stripe_expires_at = account_link.expires_at

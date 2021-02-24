@@ -20,7 +20,7 @@ router.register(r'chain_posts', views.ChainPostsViewSet, basename="create_post_c
 router.register(r'comments/create', views.CreateCommentViewSet, basename="create_comment")
 router.register(r'comments/(?P<post_id>[0-9a-f-]+)', views.CommentsViewSet, basename="comments")
 router.register(r'comment_replies/(?P<comment_id>[0-9a-f-]+)', views.CommentRepliesViewSet, basename="comment_replies")
-router.register(r'projects/(?P<project_id>\d+)/teams', views.TeamsViewSet, basename="project_teams")
+router.register(r'projects/(?P<project_id>[0-9a-f-]+)/teams', views.TeamsViewSet, basename="project_teams")
 router.register(r'projects', views.ProjectsViewSet)
 router.register(r'milestone_reports/(?P<milestone_id>\d+)', views.MilestoneCompletionReportViewSet)
 router.register(r'my_projects', views.MyProjectsViewSet)
@@ -40,5 +40,10 @@ urlpatterns = [
     path('v1/attach_payment_method/', views.attach_payment_method, name="attach_payment_method"),
     path('v1/upload_video/', views.upload_video, name="upload_video"),
     path('v1/webhooks/upload_video_webhook/', views.upload_video_webhook, name="webhooks_upload_video"),
+    path('v1/webhooks/stripe/', views.stripe_webook, name="stripe_webhook"),
+    path('v1/create_stripe_account_link/', views.create_stripe_account_link, name="create_stripe_account_link"),
+    path('v1/get_stripe_balance/', views.get_stripe_balance, name="get_stripe_balance"),
+    path('v1/get_stripe_login_link/', views.get_stripe_login, name="get_stripe_login_link"),
     path('v1/posts/<uuid:id>/change_react/', views.change_or_delete_react, name="change_or_delete_react"),
 ]
+
