@@ -136,6 +136,7 @@ class MyCoachesViewSet(viewsets.ModelViewSet):
 
 
 class PostViewSet(viewsets.ModelViewSet):
+    permission_classes = [permissions.IsAuthenticated, ]
     queryset = Post.objects.all()
     serializer_class = serializers.PostSerializer
     lookup_field = 'surrogate'
