@@ -441,7 +441,7 @@ def upload_video(request):
     passthrough_id = str(uuid.uuid1())
     
     # Mark post as processing while video is being processed by mux
-    post = Post.objects.get(pk=request.data['post'])
+    post = Post.objects.get(surrogate=request.data['post'])
     post.status == Post.PROCESSING
     post.save()
     PostVideoAssetMetaData.objects.create(passthrough=passthrough_id, post=post)
