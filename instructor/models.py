@@ -61,7 +61,7 @@ class CoachApplication(models.Model):
             try:
                 coach = self.subscriber.user.coach
             # Only create coach account if it doesn't exist
-            except (FileNotFoundError, ObjectDoesNotExist) as e:
+            except ObjectDoesNotExist as e:
                 self.subscriber.user.is_coach = True
                 self.subscriber.user.save()
                 avatar = None

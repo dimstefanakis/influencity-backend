@@ -39,6 +39,16 @@ ALLOWED_HOSTS = os.environ.get("DJANGO_ALLOWED_HOSTS", "127.0.0.1,localhost,192.
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
 
+AWS_ACCESS_KEY_ID = os.environ.get("AWS_ACCESS_KEY_ID")
+AWS_SECRET_ACCESS_KEY = os.environ.get("AWS_SECRET_ACCESS_KEY")
+AWS_STORAGE_BUCKET_NAME = os.environ.get("AWS_STORAGE_BUCKET_NAME")
+AWS_S3_CUSTOM_DOMAIN = '%s.s3.amazonaws.com' % AWS_STORAGE_BUCKET_NAME
+AWS_S3_OBJECT_PARAMETERS = {
+    'CacheControl': 'max-age=86400',
+}
+AWS_LOCATION = 'static'
+DEFAULT_FILE_STORAGE = 'coach.storage_backends.MediaStorage'
+
 # Application definition
 JQUERY_URL = "https://code.jquery.com/jquery-3.5.1.min.js"
 INSTALLED_APPS = [
@@ -62,6 +72,7 @@ INSTALLED_APPS = [
     'django_filters',
     'channels',
     'mptt',
+    'storages',
     'accounts',
     'instructor',
     'subscribers',
