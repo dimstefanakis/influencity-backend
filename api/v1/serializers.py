@@ -205,11 +205,11 @@ class CreateMilestoneCompletionReportSerializer(serializers.ModelSerializer):
             _member = Subscriber.objects.filter(surrogate=member)
             milestone_report.members.set(_member)
         return milestone_report
-
+    
     class Meta:
         model = MilestoneCompletionReport
-        fields = ['members', 'message', 'milestone', 'images']
-        read_only_fields = ['milestone']
+        fields = ['surrogate', 'members', 'message', 'milestone', 'images']
+        read_only_fields = ['milestone', 'surrogate']
 
 
 class MilestoneCompletionReportSerializer(serializers.ModelSerializer):
@@ -217,7 +217,7 @@ class MilestoneCompletionReportSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = MilestoneCompletionReport
-        fields = ['members', 'message', 'milestone', 'images']
+        fields = ['members', 'message', 'milestone', 'images', 'surrogate']
         read_only_fields = fields
 
 
@@ -351,7 +351,7 @@ class PostSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Post
-        fields = ['status','text', 'coach', 'images', 'videos', 'tiers', 
+        fields = ['status','text', 'coach', 'images', 'videos', 'tier', 'tiers', 
         'chained_posts', 'id', 'linked_project', 'reacted', 'reacts']
 
     def get_fields(self):
@@ -377,7 +377,9 @@ class PostNoChainSerializer(serializers.ModelSerializer):
 class PostCreateSerializer(serializers.ModelSerializer):
     coach = CoachSerializer(required=False)
     images = serializers.ListField(child=serializers.ImageField(), write_only=True, required=False)
+    # tier = serializers.IntegerField(required=True)
     linked_project = serializers.UUIDField(required=False)
+    has_videos = serializers.BooleanField(required=False)
     id = serializers.SerializerMethodField(required=False)
 
     def get_id(self, post):
@@ -398,10 +400,10 @@ class PostCreateSerializer(serializers.ModelSerializer):
         except KeyError:
             images = []
 
-        try:
-            tiers = validated_data.pop('tiers')
-        except KeyError:
-            tiers = []
+        # try:
+        #     tiers = validated_data.pop('tiers')
+        # except KeyError:
+        #     tiers = []
 
         try:
             linked_project_surrogate = validated_data.pop('linked_project')
@@ -412,17 +414,24 @@ class PostCreateSerializer(serializers.ModelSerializer):
         if linked_project_surrogate:
             linked_project = Project.objects.filter(surrogate=linked_project_surrogate).first()
 
-        post = Post.objects.create(coach=coach, linked_project=linked_project, **validated_data)
+        try:
+            has_videos = validated_data.pop('has_videos')
+            status = Post.PROCESSING if has_videos else Post.DONE
+        except KeyError:
+            status = Post.DONE
+
+        post = Post.objects.create(coach=coach, 
+            status=status, linked_project=linked_project, **validated_data)
         
         for image in images:
             PostImage.objects.create(post=post, coach=coach, image=image)
-        post.tiers.set(tiers)
+        # post.tiers.set(tiers)
 
         return post
 
     class Meta:
         model = Post
-        fields = ['text', 'images', 'videos', 'tiers', 'id', 'linked_project', 'chained_posts', 'coach']
+        fields = ['tier', 'text', 'images', 'videos', 'id', 'linked_project', 'chained_posts', 'coach', 'has_videos']
         read_only_fields = ['id', 'chained_posts', 'coach', 'videos', 'reacted', 'reacts', 'status']
 
 

@@ -39,6 +39,7 @@ urlpatterns = [
     path('v1/subscribe/<uuid:id>', views.subscribe, name="subscribe"),
     path('v1/attach_payment_method/', views.attach_payment_method, name="attach_payment_method"),
     path('v1/upload_video/', views.upload_video, name="upload_video"),
+    path('v1/upload_milestonecompletion_video/', views.upload_milestonecompletion_video, name="upload_milestonecompletion_video"),
     path('v1/webhooks/upload_video_webhook/', views.upload_video_webhook, name="webhooks_upload_video"),
     path('v1/webhooks/stripe/', views.stripe_webook, name="stripe_webhook"),
     path('v1/create_stripe_account_link/', views.create_stripe_account_link, name="create_stripe_account_link"),

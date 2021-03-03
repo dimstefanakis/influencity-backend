@@ -60,11 +60,21 @@ class MilestoneCompletionReport(models.Model):
         (REJECTED, 'Rejected'),
     ]
 
+    PROCESSING = 'PR'
+    DONE = 'DO'
+    STATUS_CHOICES = [
+        (PROCESSING, 'Processing'),
+        (DONE, 'Done')
+    ]
+
     status = models.CharField(
         max_length=2,
         choices=STATUSES,
         default=PENDING,
     )
+    
+    surrogate = models.UUIDField(default=uuid.uuid4, db_index=True)
+    video_status = models.CharField(max_length=2, choices=STATUS_CHOICES, default=PROCESSING)
     milestone = models.ForeignKey(Milestone, on_delete=models.CASCADE, related_name="reports", null=True, blank=True)
     members = models.ManyToManyField(Subscriber, related_name="milestone_reports")
     message = models.TextField(null=True, blank=True)
