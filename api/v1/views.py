@@ -17,7 +17,7 @@ from accounts.models import User
 from subscribers.models import Subscriber, Subscription
 from instructor.models import Coach, CoachApplication
 from posts.models import Post, PostVideoAssetMetaData, PlaybackId, PostVideo
-from projects.models import Project, Team, MilestoneCompletionReport, Milestone
+from projects.models import Project, Team, MilestoneCompletionReport, Milestone, MilestoneCompletionVideo, MilestoneCompletionVideoAssetMetaData, MilestoneCompletionPlaybackId
 from tiers.models import Tier
 from expertisefields.models import ExpertiseField
 from comments.models import Comment
@@ -462,8 +462,38 @@ def upload_video(request):
     # Mark post as processing while video is being processed by mux
     post = Post.objects.get(surrogate=request.data['post'])
     post.status == Post.PROCESSING
-    post.save()
+    post.save(processing=True)
     PostVideoAssetMetaData.objects.create(passthrough=passthrough_id, post=post)
+    create_asset_request = mux_python.CreateAssetRequest(playback_policy=[mux_python.PlaybackPolicy.PUBLIC],
+                                                         mp4_support="standard", passthrough=passthrough_id)
+
+    # API Client Initialization
+    request = mux_python.CreateUploadRequest(new_asset_settings=create_asset_request, test=True)
+    direct_uploads_api = mux_python.DirectUploadsApi(mux_python.ApiClient(configuration))
+    response = direct_uploads_api.create_direct_upload(request)
+
+    try:
+        pass
+    except ApiException as e:
+        print("Exception when calling AssetsApi->list_assets: %s\n" % e)
+    return Response({"url": response.data.url})
+
+
+@api_view(http_method_names=['POST'])
+@permission_classes((permissions.AllowAny,))
+def upload_milestonecompletion_video(request):
+    # Authentication Setup
+    configuration = mux_python.Configuration()
+    configuration.username = os.environ['MUX_TOKEN_ID']
+    configuration.password = os.environ['MUX_TOKEN_SECRET']
+
+    passthrough_id = str(uuid.uuid1())
+    
+    # Mark milestone report as processing while video is being processed by mux
+    milestone_completion_report = MilestoneCompletionReport.objects.get(surrogate=request.data['milestone_completion_report'])
+    milestone_completion_report.video_status == MilestoneCompletionReport.PROCESSING
+    milestone_completion_report.save()
+    MilestoneCompletionVideoAssetMetaData.objects.create(passthrough=passthrough_id, milestone_completion_report=milestone_completion_report)
     create_asset_request = mux_python.CreateAssetRequest(playback_policy=[mux_python.PlaybackPolicy.PUBLIC],
                                                          mp4_support="standard", passthrough=passthrough_id)
 
@@ -486,13 +516,26 @@ def upload_video_webhook(request):
         passthrough = request.data['data']['passthrough']
         playback_ids = request.data['data']['playback_ids']
         asset_id = request.data['data']['id']
-        video_data = PostVideoAssetMetaData.objects.get(passthrough=passthrough)
-        video = PostVideo.objects.create(asset_id=asset_id, passthrough=video_data.passthrough, post=video_data.post)
-        for playback_id in playback_ids:
-            PlaybackId.objects.create(playback_id=playback_id['id'], policy=playback_id['policy'], video=video)
-        # Video is done processing by mux. Mark it as done.
-        video_data.post.status = Post.DONE
-        video_data.post.save()
+
+        # in case the video is attached to a post
+        if PostVideoAssetMetaData.objects.filter(passthrough=passthrough).exists():
+            video_data = PostVideoAssetMetaData.objects.get(passthrough=passthrough)
+            video = PostVideo.objects.create(asset_id=asset_id, passthrough=video_data.passthrough, post=video_data.post)
+            for playback_id in playback_ids:
+                PlaybackId.objects.create(playback_id=playback_id['id'], policy=playback_id['policy'], video=video)
+            # Video is done processing by mux. Mark it as done.
+            video_data.post.status = Post.DONE
+            video_data.post.save()
+
+        # in case the video is attached to a post
+        if MilestoneCompletionVideoAssetMetaData.objects.filter(passthrough=passthrough).exists():
+            video_data = MilestoneCompletionVideoAssetMetaData.objects.get(passthrough=passthrough)
+            video = MilestoneCompletionVideo.objects.create(asset_id=asset_id, passthrough=video_data.passthrough, milestone_completion_report=video_data.milestone_completion_report)
+            for playback_id in playback_ids:
+                MilestoneCompletionPlaybackId.objects.create(playback_id=playback_id['id'], policy=playback_id['policy'], video=video)
+            # Video is done processing by mux. Mark it as done.
+            video_data.milestone_completion_report.status = MilestoneCompletionReport.DONE
+            video_data.milestone_completion_report.save()
     return Response()
 
 
