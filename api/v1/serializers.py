@@ -173,6 +173,11 @@ class MilestoneCompletionImageSerializer(serializers.ModelSerializer):
 
 
 class MilestoneSerializer(serializers.ModelSerializer):
+    id = serializers.SerializerMethodField()
+
+    def get_id(self, milestone):
+        return milestone.surrogate
+
     class Meta:
         model = Milestone
         fields = ['description', 'id']
@@ -238,10 +243,10 @@ class ProjectSerializer(serializers.ModelSerializer):
         fields = ['name', 'description', 'difficulty', 'team_size', 'prerequisites', 'milestones', 'id']
 
 
-class CreateProjectSerializer(serializers.ModelSerializer):
+class CreateOrUpdateProjectSerializer(serializers.ModelSerializer):
     # the below 2 contain a list of descriptions for both prerequisites and milestones
     prerequisites = serializers.ListField(child=serializers.CharField(), write_only=True, required=False)
-    milestones = serializers.ListField(child=serializers.CharField(), write_only=True, required=False)
+    milestones = serializers.ListField(child=serializers.JSONField(), write_only=True, required=False)
     attached_posts = serializers.ListField(child=serializers.UUIDField(), write_only=True, required=False)
 
     def create(self, validated_data):
@@ -275,14 +280,64 @@ class CreateProjectSerializer(serializers.ModelSerializer):
             Prerequisite.objects.create(description=prerequisite, project=project)
 
         for milestone in milestones:
-            Milestone.objects.create(description=milestone, project=project)
+            milestone = json.loads(milestone)
+            Milestone.objects.create(description=milestone['description'], project=project)
         
         return project
 
+    def update(self, instance, validated_data):
+        coach = self.context['request'].user.coach
+
+        try:
+            prerequisites = validated_data.pop('prerequisites')
+        except KeyError:
+            prerequisites = []
+
+        # prerequisites are safe to delete and recreate
+        instance.prerequisites.all().delete()
+        for prerequisite in prerequisites:
+            Prerequisite.objects.create(description=prerequisite, project=instance)
+
+        # milestones need to be iterated and updated separately since they have
+        # multiple relations attached to them
+        try:
+            milestones = validated_data.pop('milestones')
+        except KeyError:
+            milestones = []
+
+        for milestone in milestones:
+            milestone = json.loads(milestone)
+            #try:
+            milestone_instance = Milestone.objects.filter(surrogate=milestone['id'])
+            if milestone_instance.exists():
+                milestone_instance = milestone_instance.first()
+                milestone_instance.description = milestone['description']
+                milestone_instance.save()
+            else:
+                Milestone.objects.create(description=milestone['description'], project=instance)
+            # error might be thrown if the provided id is not a valid pk
+            # except Exception as e:
+                # Milestone.objects.create(description=milestone['description'], project=instance)
+
+        try:
+            attached_posts = validated_data.pop('attached_posts')
+            # if user has provided new attached posts clear the old ones
+            instance.posts.clear()
+        except KeyError:
+            attached_posts = []
+
+        for post_id in attached_posts:
+            post = Post.objects.get(surrogate=post_id)
+            post.linked_project = project
+            post.save()
+        instance = super(CreateOrUpdateProjectSerializer, self).update(instance, validated_data)
+        return instance
+
     class Meta:
         model = Project
-        fields = ['name', 'description', 'difficulty', 'team_size', 'prerequisites', 'milestones', 'attached_posts', 'id']
-        read_only_fields = ['id']
+        fields = ['name', 'description', 'difficulty', 'team_size', 
+                'prerequisites', 'milestones', 'attached_posts', 'id', 'surrogate']
+        read_only_fields = ['id', 'surrogate']
 
 
 class PostImageSerializer(serializers.ModelSerializer):

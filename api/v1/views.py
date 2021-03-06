@@ -96,17 +96,24 @@ class CoachViewSet(viewsets.ModelViewSet):
     serializer_class = serializers.CoachSerializer
     #filterset_fields = ['expertise_field']
     filterset_class = CoachFilterSet
-
+    lookup_field = 'surrogate'
+    permission_classes_by_action = {'create': [permissions.IsAuthenticated],
+                                    'update': [permissions.IsAuthenticated],
+                                    'partial_update': [permissions.IsAuthenticated],
+                                    'list': [permissions.AllowAny],
+                                    'retreive': [permissions.AllowAny]}
     def get_queryset(self):
-        """
-        Optionally restricts the returned purchases to a given user,
-        by filtering against a `username` query parameter in the URL.
-        """
         queryset = Coach.objects.all()
         username = self.request.query_params.get('username', None)
-        if username is not None:
-            queryset = queryset.filter(purchaser__username=username)
         return queryset
+
+    def get_permissions(self):
+        try:
+            # return permission_classes depending on `action` 
+            return [permission() for permission in self.permission_classes_by_action[self.action]]
+        except KeyError: 
+            # action is not set return default permission_classes
+            return [permission() for permission in self.permission_classes]
 
 
 class CoachApplicationViewSet(generics.CreateAPIView, 
@@ -196,11 +203,23 @@ class ChainPostsViewSet(generics.CreateAPIView, viewsets.GenericViewSet):
 
 class ProjectsViewSet(viewsets.ModelViewSet):
     queryset = Project.objects.all()
+    permission_classes = [permissions.IsAuthenticated,]
+    lookup_field = 'surrogate'
 
     def get_serializer_class(self):
-        if self.action=='create':
-            return serializers.CreateProjectSerializer
+        if self.action=='create' or self.action=='update' or self.action=='partial_update':
+            return serializers.CreateOrUpdateProjectSerializer
         return serializers.ProjectSerializer
+
+    # def get_permissions(self):
+    #     """
+    #     Instantiates and returns the list of permissions that this view requires.
+    #     """
+    #     if self.action == 'create':
+    #         permission_classes = [permissions.IsAuthenticated]
+    #     else:
+    #         permission_classes = [permissions.IsAuthenticated]
+    #     return [permission() for permission in permission_classes]
 
 
 class MyProjectsViewSet(viewsets.ModelViewSet):

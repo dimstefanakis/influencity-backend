@@ -34,6 +34,7 @@ class Project(models.Model):
 
 
 class Prerequisite(models.Model):
+    surrogate = models.UUIDField(default=uuid.uuid4, db_index=True)
     description = models.TextField()
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="prerequisites")
 
@@ -42,6 +43,7 @@ class Prerequisite(models.Model):
 
 
 class Milestone(models.Model):
+    surrogate = models.UUIDField(default=uuid.uuid4, db_index=True)
     description = models.TextField()
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="milestones")
     completed_teams = models.ManyToManyField('Team', blank=True, related_name="milestones_completed")
@@ -65,6 +67,7 @@ class MilestoneCompletionReport(models.Model):
         choices=STATUSES,
         default=PENDING,
     )
+    surrogate = models.UUIDField(default=uuid.uuid4, db_index=True)
     milestone = models.ForeignKey(Milestone, on_delete=models.CASCADE, related_name="reports", null=True, blank=True)
     members = models.ManyToManyField(Subscriber, related_name="milestone_reports")
     message = models.TextField(null=True, blank=True)
