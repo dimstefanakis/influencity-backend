@@ -33,7 +33,7 @@ class Subscriber(CommonUser):
 
 class Subscription(models.Model):
     subscriber = models.ForeignKey(Subscriber, on_delete=models.CASCADE, null=True, blank=True,
-                                   related_name="subscriber")
+                                   related_name="subscriptions")
     tier = models.ForeignKey('tiers.Tier', on_delete=models.CASCADE, related_name="subscriptions", null=True, blank=True)
     subscription_id = models.CharField(max_length=30, null=True, blank=True)
     customer_id = models.CharField(max_length=30, null=True, blank=True)

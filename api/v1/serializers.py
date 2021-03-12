@@ -1,10 +1,11 @@
+from django.db.models import Count
 from rest_framework import serializers
 from accounts.models import User
 from instructor.models import Coach, CoachApplication
 from posts.models import Post, PostImage, PostVideo, PlaybackId
 from projects.models import Project, Prerequisite, Milestone, Team, MilestoneCompletionReport, MilestoneCompletionImage
 from comments.models import CommentImage, Comment
-from subscribers.models import Subscriber, SubscriberAvatar
+from subscribers.models import Subscriber, SubscriberAvatar, Subscription
 from expertisefields.models import ExpertiseField, ExpertiseFieldAvatar
 from tiers.models import Tier, Benefit
 from reacts.models import React
@@ -28,6 +29,7 @@ class CoachSerializer(serializers.ModelSerializer):
     projects = serializers.SerializerMethodField()
     tier = serializers.SerializerMethodField()
     tiers = serializers.SerializerMethodField()
+    tier_full = serializers.SerializerMethodField()
 
     @staticmethod
     def get_projects(coach):
@@ -40,10 +42,22 @@ class CoachSerializer(serializers.ModelSerializer):
         return None
 
     def get_tier(self, coach):
-        user = self.context['request'].user
-        if user.is_authenticated:
-            if user.subscriptions.filter(coach=coach).exists():
-                return user.subscriptions.filter(coach=coach).first().get_tier_display()
+        try:
+            user = self.context['request'].user
+            if user.is_authenticated:
+                if user.subscriber.subscriptions.filter(tier__coach=coach).exists():
+                    return user.subscriber.subscriptions.filter(tier__coach=coach).first().tier.get_tier_display()
+        except KeyError:
+            return None
+
+    def get_tier_full(self, coach):
+        try:
+            user = self.context['request'].user
+            if user.is_authenticated:
+                if user.subscriber.subscriptions.filter(tier__coach=coach).exists():
+                    return TierSerializer(user.subscriber.subscriptions.filter(tier__coach=coach).first().tier).data
+        except KeyError:
+            return None
 
     def get_tiers(self, coach):
         return TierSerializer(coach.tiers.all(), many=True).data
@@ -51,7 +65,7 @@ class CoachSerializer(serializers.ModelSerializer):
     class Meta:
         model = Coach
         fields = ['name', 'avatar', 'bio', 'expertise_field', 'projects', 
-                'tier', 'tiers', 'surrogate', 'charges_enabled']
+                'tier', 'tier_full', 'tiers', 'surrogate', 'charges_enabled']
 
 
 class CoachApplicationSerializer(serializers.ModelSerializer):
@@ -134,10 +148,10 @@ class UserMeSerializer(serializers.ModelSerializer):
     def get_subscriber_data(self, user):
         if not user.coach:
             return None
-        sub_count = user.coach.subscribers.count()
-        free_sub_count = user.coach.subscribers.filter(subscriptions__tier=Tier.FREE).count()
-        tier1_sub_count = user.coach.subscribers.filter(subscriptions__tier=Tier.TIER1).count()
-        tier2_sub_count = user.coach.subscribers.filter(subscriptions__tier=Tier.TIER2).count()
+        sub_count = Subscription.objects.filter(tier__coach=user.coach).count() #user.coach.subscribers.count()
+        free_sub_count = Subscription.objects.filter(tier__tier=Tier.FREE, tier__coach=user.coach).count()
+        tier1_sub_count = Subscription.objects.filter(tier__tier=Tier.TIER1, tier__coach=user.coach).count()
+        tier2_sub_count = Subscription.objects.filter(tier__tier=Tier.TIER2, tier__coach=user.coach).count()
         return {'subscribers_count': sub_count, 'free_subscribers_count': free_sub_count,
                 'tier1_subscribers_count': tier1_sub_count, 'tier2_subscribers_count': tier2_sub_count}
 
@@ -152,6 +166,7 @@ class UserMeNoCoachSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['username', 'email', 'is_coach', 'is_subscriber', 'subscriber']
+
 
 class PrerequisiteSerializer(serializers.ModelSerializer):
     class Meta:
@@ -396,10 +411,13 @@ class PostSerializer(serializers.ModelSerializer):
         return post.surrogate
 
     def get_reacted(self, post):
-        user = self.context['request'].user
-        if user.reacts.filter(object_id=post.id, user=user).exists():
-            return True
-        return False
+        try:
+            user = self.context['request'].user
+            if user.reacts.filter(object_id=post.id, user=user).exists():
+                return True
+            return False
+        except KeyError:
+            return None
 
     def get_reacts(self, post):
         return post.reacts.count()
@@ -874,3 +892,25 @@ class MessageSerializer(serializers.ModelSerializer):
     class Meta:
         model = Message
         fields = ['text', 'created', 'user', 'id']
+
+
+class GenericNotificationRelatedField(serializers.RelatedField):
+    def to_representation(self, value):
+        if isinstance(value, Post):
+            serializers = PostSerializer(value)
+        if isinstance(value, Subscriber):
+            serializers = SubscriberSerializer(value)
+        if isinstance(value, Coach):
+            serializers = CoachSerializer(value)
+        return serializers.data
+
+
+class NotificationSerializer(serializers.Serializer):
+    id = serializers.IntegerField(read_only=True)
+    actor = GenericNotificationRelatedField(read_only=True)
+    recipient = UserSerializer(User, read_only=True)
+    unread = serializers.BooleanField(read_only=True)
+    target = GenericNotificationRelatedField(read_only=True)
+    action_object = GenericNotificationRelatedField(read_only=True)
+    verb = serializers.CharField(read_only=True)
+    timestamp = serializers.DateTimeField(read_only=True)

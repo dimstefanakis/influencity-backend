@@ -29,6 +29,7 @@ router.register(r'expertise_fields', views.ExpertiseViewSet)
 router.register(r'my_tiers', views.MyTiersViewSet, basename="my_tiers")
 router.register(r'my_teams', views.MyTeamsViewSet, basename="my_teams")
 router.register(r'reacts', views.ReactsViewSet)
+router.register(r'notifications', views.NotificationsViewSet, basename="notifications")
 router.register(r'my_chat_rooms/(?P<surrogate>[0-9a-f-]+)/messages', views.RoomMessagesViewSet,
                 basename="chat_rooms_messages")
 router.register(r'my_chat_rooms', views.MyChatRoomsViewSet, basename="my_chat_rooms")
@@ -37,6 +38,8 @@ urlpatterns = [
     path('v1/', include(router.urls)),
     path('v1/subscriber/me/', views.subscriber_me, name="subscriber_me"),
     path('v1/subscribe/<uuid:id>', views.subscribe, name="subscribe"),
+    path('v1/join_project/<uuid:id>', views.join_project, name="join_project"),
+    path('v1/unread_notifications_count/', views.get_unread_count, name="get_unread_count"),
     path('v1/attach_payment_method/', views.attach_payment_method, name="attach_payment_method"),
     path('v1/upload_video/', views.upload_video, name="upload_video"),
     path('v1/upload_milestonecompletion_video/', views.upload_milestonecompletion_video, name="upload_milestonecompletion_video"),

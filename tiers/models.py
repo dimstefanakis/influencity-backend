@@ -18,6 +18,8 @@ def money_to_integer(money):
             10 ** get_currency_precision(money.currency.code)
         )
     )
+
+
 class Tier(models.Model):
     class Meta:
         constraints = [
@@ -48,7 +50,7 @@ class Tier(models.Model):
     label = models.CharField(max_length=20, null=True, blank=True)
     subheading = models.CharField(max_length=30, null=True, blank=True)
     coach = models.ForeignKey(Coach, on_delete=models.CASCADE, related_name="tiers")
-    subscribers = models.ManyToManyField(User, null=True, blank=True, related_name="subscriptions")
+    subscribers = models.ManyToManyField(User, null=True, blank=True, related_name="deprecated_subscriptions")
     #subscriptions = models.ManyToManyField(Subscription, null=True, blank=True, related_name="subscriptions")
     product_id = models.CharField(max_length=50, null=True, blank=True)
     price_id = models.CharField(max_length=50, null=True, blank=True)

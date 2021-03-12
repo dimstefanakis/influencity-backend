@@ -13,6 +13,7 @@ from rest_framework.pagination import CursorPagination
 from rest_framework.decorators import parser_classes
 from rest_framework.parsers import MultiPartParser, JSONParser
 from django_filters import rest_framework as filters
+from notifications.models import Notification
 from accounts.models import User
 from subscribers.models import Subscriber, Subscription
 from instructor.models import Coach, CoachApplication
@@ -133,8 +134,10 @@ class MyCoachesViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         if self.request.user.is_coach:
-            return self.request.user.coaches.exclude(user=self.request.user)
-        return self.request.user.coaches.all()
+            return Coach.objects.filter(tiers__subscriptions__subscriber=self.request.user.subscriber).exclude(user=self.request.user)
+            #return self.request.user.coaches.exclude(user=self.request.user)
+        return Coach.objects.filter(tiers__subscriptions__subscriber=self.request.user.subscriber)
+        #return self.request.user.coaches.all()
 
     def get_serializer_context(self):
         return {
@@ -186,7 +189,7 @@ class NewPostsViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         post_query = Post.objects.none()
-        for coach in self.request.user.coaches.all():
+        for coach in Coach.objects.filter(tiers__subscriptions__subscriber=self.request.user.subscriber).exclude(user=self.request.user):
             post_query |= coach.posts.exclude(parent_post__isnull=False)
         return post_query
 
@@ -227,7 +230,8 @@ class MyProjectsViewSet(viewsets.ModelViewSet):
     serializer_class = serializers.MyProjectsSerializer
 
     def get_queryset(self):
-        return self.request.user.subscriber.projects.all()
+        return Project.objects.filter(teams__members=self.request.user.subscriber).distinct()
+        # return self.request.user.subscriber.projects.all()
 
     def get_serializer_context(self):
         return {
@@ -279,7 +283,7 @@ class MyTiersViewSet(viewsets.ModelViewSet):
         if self.request.user.is_coach:
             return self.request.user.coach.tiers.all()
         else:
-            return Tier.object.none()
+            return Tier.objects.none()
 
 
 class MyTeamsViewSet(viewsets.ModelViewSet):
@@ -367,10 +371,29 @@ class RoomMessagesViewSet(viewsets.ModelViewSet):
         return ChatRoom.objects.get(surrogate=self.kwargs['surrogate']).messages.all()
 
 
+class NotificationsViewSet(viewsets.ModelViewSet):
+    queryset = Notification.objects.all()
+    serializer_class = serializers.NotificationSerializer
+    permission_classes = [permissions.IsAuthenticated,]
+
+    def get_serializer_context(self):
+        return {
+            'request': self.request,
+        }
+
+
+@api_view(http_method_names=['GET'])
+@permission_classes((permissions.IsAuthenticated,))
+def get_unread_count(request):
+    return Response({'unread_count': request.user.notifications.unread().count()})
+
+
 @api_view(http_method_names=['GET', 'PATCH'])
 @permission_classes((permissions.IsAuthenticated,))
 def subscriber_me(request):
     user = request.user
+
+    # this might be unnecessary since subcriber is accessible through user
     subscriber = Subscriber.objects.filter(user=user.pk).first()
     if request.method == 'GET':
         serializer = serializers.SubscriberSerializer(subscriber)
@@ -383,6 +406,46 @@ def subscriber_me(request):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+@api_view(http_method_names=['POST'])
+@parser_classes([JSONParser])
+@permission_classes((permissions.IsAuthenticated,))
+def join_project(request, id):
+    # Remember to check if user is a subscriber of tier 1+ here
+    user = request.user
+    project = Project.objects.filter(surrogate=id)
+    if project.exists():
+        project = project.first()
+
+        # This algorithm is not optimal and should be fixed in the future
+        # Currently there is no equal distribution of members across teams 
+        # meaning that all teams will first become full sequentially and then new teams will be created
+        # Instead an average should be calculated based on the amount of members that have joined the project
+        # average = (total_members_joined / project.team_size). The algorithm should aim to populate teams
+        # until "average" is reached and once that is reached populate other teams. That should reduce the
+        # team size gap between teams
+
+        team_found = False
+ 
+        # First try to find a team with empty spots and add the user there
+        for team in project.teams.all():
+            if team.members.count() < project.team_size:
+                team_found = True
+                team.members.add(user.subscriber)
+                return Response({'team': serializers.TeamSerializer(
+                                                    team,
+                                                    context={'request': request, 
+                                                             'project': project}).data})
+
+        # If no empty teams are found / or created create a new team only with this member
+        if not team_found:
+            new_team = Team.objects.create(project=project, name=user.subscriber.name)
+            new_team.members.add(user.subscriber)
+            return Response({'team': serializers.TeamSerializer(
+                                                new_team,
+                                                context={'request': request,
+                                                         'project': project}).data})
+
+
 @api_view(http_method_names=['POST', 'DELETE'])
 @parser_classes([JSONParser])
 @permission_classes((permissions.IsAuthenticated,))
@@ -390,6 +453,39 @@ def subscribe(request, id):
     user = request.user
     tier = Tier.objects.get(surrogate=id)
     if request.method == 'POST':
+
+        # First check if the user has already subscribed to this coach with another tier
+        # if that is the case delete the existing one and initiate another subscription
+        if Subscription.objects.filter(subscriber=user.subscriber, tier__coach=tier.coach).exists():
+            sub_instance = Subscription.objects.filter(subscriber=user.subscriber, tier__coach=tier.coach).first()
+
+            subscription = stripe.Subscription.retrieve(sub_instance.subscription_id)
+            
+            subscription = stripe.Subscription.modify(
+                subscription.id,
+                cancel_at_period_end=False,
+                proration_behavior='create_prorations',
+                items=[{
+                    'id': subscription['items']['data'][0].id,
+                    'price': tier.price_id,
+                }]
+            )
+        
+            sub_instance.tier = tier
+            sub_instance.json_data = json.dumps(subscription)
+            sub_instance.subscription_id = subscription.id
+            sub_instance.save()
+
+            return Response({'tier': tier.surrogate})
+
+        # Then check if the user has already subscribed with the existing tier and return the tier
+        # this will be a result of a possible bug so we don't need to do anything just return the existing tier
+        if Subscription.objects.filter(subscriber=user.subscriber, tier=tier).exists():
+            return Response({'tier': tier.surrogate})
+
+
+        # If neither of the above scenarios happen create a new subscription on both our end
+        # and stripe
         subscription = stripe.Subscription.create(
             customer=request.user.subscriber.customer_id,
             items=[{
@@ -404,9 +500,17 @@ def subscribe(request, id):
     if request.method == 'DELETE':
         subcription = Subscription.objects.filter(subscriber=request.user.subscriber,
                                    tier=tier).first()
+        subcription.delete()
+
+        # remember to remove user from all his teams with this coach
+        teams = Team.objects.filter(project__coach=tier.coach, members=user.subscriber)
+        
+        for team in teams:
+            # remove subscriber from team
+            team.members.remove(user.subscriber)
+            
         stripe.Subscription.delete(subcription.subscription_id)
 
-        # tier.subscribers.remove(user)
     return Response({'tier': tier.surrogate})
 
 

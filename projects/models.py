@@ -1,4 +1,6 @@
 from django.db import models
+from django.db.models.signals import m2m_changed
+from django.dispatch import receiver
 from subscribers.models import Subscriber
 from common.models import CommonImage
 from instructor.models import Coach
@@ -117,3 +119,12 @@ class Team(models.Model):
     def __str__(self):
         return self.name
 
+
+@receiver(m2m_changed, sender=Team.members.through)
+def team_members_changed(sender, instance, **kwargs):
+    action = kwargs.pop('action', None)
+    pk_set = kwargs.pop('pk_set', None)    
+    if action == "post_remove":
+        # if teams is left with no members delete it
+        if instance.members.count() == 0:
+            instance.delete()

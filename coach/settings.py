@@ -49,6 +49,7 @@ AWS_S3_OBJECT_PARAMETERS = {
 AWS_LOCATION = 'static'
 DEFAULT_FILE_STORAGE = 'coach.storage_backends.MediaStorage'
 
+
 # Application definition
 JQUERY_URL = "https://code.jquery.com/jquery-3.5.1.min.js"
 INSTALLED_APPS = [
@@ -66,6 +67,8 @@ INSTALLED_APPS = [
     'rest_framework.authtoken',
     'rest_auth',
     'rest_auth.registration',
+    'notifications',
+    'push_notifications',
     'drf_yasg',
     'smart_selects',
     'djmoney',
@@ -83,6 +86,7 @@ INSTALLED_APPS = [
     'tiers',
     'projects',
     'chat',
+    'awards',
     'api'
 ]
 
@@ -100,10 +104,11 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
+    #'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'coach.middleware.DisableCSRF'
 ]
 
 ROOT_URLCONF = 'coach.urls'
@@ -194,7 +199,7 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_FILTER_BACKENDS': ['django_filters.rest_framework.DjangoFilterBackend'],
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        #'rest_framework.authentication.SessionAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
     'DEFAULT_PARSER_CLASSES': (

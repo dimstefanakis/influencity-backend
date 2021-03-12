@@ -1,8 +1,12 @@
 from django.db import models
-from django.db.models.signals import pre_save
+from django.db.models.signals import pre_save, post_save
 from django.dispatch import receiver
 from django.contrib.contenttypes.fields import GenericRelation
 from smart_selects.db_fields import ChainedManyToManyField
+from notifications.signals import notify
+from notifications.models import Notification
+from asgiref.sync import async_to_sync
+import channels.layers
 from common.models import CommonImage
 from instructor.models import Coach
 from tiers.models import Tier
@@ -72,3 +76,24 @@ class PlaybackId(models.Model):
     policy = models.CharField(max_length=30)
     playback_id = models.CharField(max_length=100)
     video = models.ForeignKey(PostVideo, on_delete=models.CASCADE, related_name="playback_ids")
+
+
+# notifications sent to the subscribers after the coach posts
+@receiver(post_save, sender=Post, dispatch_uid="post_created")
+def post_created(sender, instance, created, **kwargs):
+    # if created
+    channel_layer = channels.layers.get_channel_layer()
+    for sub in instance.tier.subscribers.all():
+        notification_data = notify.send(instance.coach, recipient=sub, verb='just posted', action_object=instance)
+
+        # this is the first time I am doing this
+        # I don't honestly know why I am able to get the created the notification like this
+        # but I cannot find an alternative so I will use it throughout this app
+        notification = notification_data[0][1][0]
+        async_to_sync(channel_layer.group_send)(
+            f"{str(sub.surrogate)}.notitifactions.group",
+            {
+                'type': 'send.notification',
+                'id': notification.id
+            }
+        )
