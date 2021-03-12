@@ -337,6 +337,7 @@ class ReactsViewSet(viewsets.ModelViewSet):
 class MilestoneCompletionReportViewSet(viewsets.ModelViewSet):
     serializer_class = serializers.MilestoneCompletionReportSerializer
     queryset = MilestoneCompletionReport.objects.all()
+    permission_classes = [permissions.IsAuthenticated,]
 
     def get_serializer_class(self):
         if self.action == 'create':
@@ -508,7 +509,7 @@ def subscribe(request, id):
         for team in teams:
             # remove subscriber from team
             team.members.remove(user.subscriber)
-            
+
         stripe.Subscription.delete(subcription.subscription_id)
 
     return Response({'tier': tier.surrogate})
