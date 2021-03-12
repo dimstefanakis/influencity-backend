@@ -6,7 +6,7 @@ from .channelsmiddleware import JWTChannelMiddleware
 import chat.routing
 import posts.routing
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'mysite.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'coach.settings')
 
 application = ProtocolTypeRouter({
     "http": get_asgi_application(),
