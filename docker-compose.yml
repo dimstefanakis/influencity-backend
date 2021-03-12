@@ -15,7 +15,7 @@ services:
     build:
       context: .
       dockerfile: ./Dockerfile
-    command: daphne -b 0.0.0.0 -p 8000 coach.asgi:channel_layer
+    command: daphne -b 0.0.0.0 -p 8000 coach.asgi:application
     volumes:
       - .:/code
     ports:
@@ -28,6 +28,6 @@ services:
     build: .
     command: python manage.py runworker
     volumes:
-    - .:/code
+      - .:/code
     links:
-    - redis
+      - redis
