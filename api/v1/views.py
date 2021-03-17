@@ -372,6 +372,17 @@ class RoomMessagesViewSet(viewsets.ModelViewSet):
         return ChatRoom.objects.get(surrogate=self.kwargs['surrogate']).messages.all()
 
 
+class CreateMessageViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin):
+    serializer_class = serializers.CreateMessageSerializer
+    permission_classes = [permissions.IsAuthenticated, ]
+    queryset = Message.objects.all()
+
+    def get_serializer_context(self):
+        return {
+            'request': self.request,
+        }
+
+
 class NotificationsViewSet(viewsets.ModelViewSet):
     queryset = Notification.objects.all()
     serializer_class = serializers.NotificationSerializer
@@ -432,6 +443,12 @@ def join_project(request, id):
             if team.members.count() < project.team_size:
                 team_found = True
                 team.members.add(user.subscriber)
+
+                # add the user to all available chat rooms for this project
+                chat_rooms = ChatRoom.objects.filter(project=project, team=team)
+                for chat_room in chat_rooms:
+                    chat_room.members.add(user.subscriber)
+
                 return Response({'team': serializers.TeamSerializer(
                                                     team,
                                                     context={'request': request, 
@@ -441,6 +458,16 @@ def join_project(request, id):
         if not team_found:
             new_team = Team.objects.create(project=project, name=user.subscriber.name)
             new_team.members.add(user.subscriber)
+
+            # create a new chat room for the team
+            chat_room = ChatRoom.objects.create(name=user.subscriber.name, team=new_team,
+                                                type=ChatRoom.TEAM, project=project)
+            chat_room.members.add(user.subscriber)
+
+            # also create another chat room for the team + the coach
+            chat_room_with_coach = ChatRoom.objects.create(name=user.subscriber.name, type=ChatRoom.TEAM_WITH_COACH, project=project)
+            chat_room_with_coach.members.add(user.subscriber, project.coach.user.subscriber)
+
             return Response({'team': serializers.TeamSerializer(
                                                 new_team,
                                                 context={'request': request,
@@ -496,7 +523,7 @@ def subscribe(request, id):
 
         Subscription.objects.create(subscriber=request.user.subscriber, subscription_id=subscription.id,
                                     customer_id=request.user.subscriber.customer_id, json_data=json.dumps(subscription),
-                                    tier=tier)
+                                    tier=tier, price_id=tier.price_id)
         # tier.subscribers.add(user)
     if request.method == 'DELETE':
         subcription = Subscription.objects.filter(subscriber=request.user.subscriber,
@@ -507,6 +534,11 @@ def subscribe(request, id):
         teams = Team.objects.filter(project__coach=tier.coach, members=user.subscriber)
         
         for team in teams:
+            # remove user from all the relevant chat rooms for this project
+            chat_rooms = ChatRoom.objects.filter(team=team)
+            for chat_room in chat_rooms:
+                chat_room.members.remove(user.subscriber)
+
             # remove subscriber from team
             team.members.remove(user.subscriber)
 

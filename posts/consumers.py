@@ -3,8 +3,8 @@ from channels.db import database_sync_to_async
 from notifications.models import Notification
 import json
 
-class NotificationConsumer(AsyncWebsocketConsumer):
 
+class NotificationConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         user = self.scope['user']
 

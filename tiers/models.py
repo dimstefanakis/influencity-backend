@@ -10,6 +10,7 @@ from accounts.models import User
 from subscribers.models import Subscription
 from decimal import Decimal
 import uuid
+import json
 
 stripe.api_key = os.environ.get('STRIPE_SECRET_KEY')
 def money_to_integer(money):
@@ -19,6 +20,16 @@ def money_to_integer(money):
         )
     )
 
+
+def create_stripe_price(instance):
+    price = stripe.Price.create(
+        unit_amount=money_to_integer(instance.credit),
+        currency=instance.credit.currency.code.lower(),
+        recurring={"interval": "month"},
+        product=instance.product_id,
+    )
+
+    return price
 
 class Tier(models.Model):
     class Meta:
@@ -54,10 +65,43 @@ class Tier(models.Model):
     #subscriptions = models.ManyToManyField(Subscription, null=True, blank=True, related_name="subscriptions")
     product_id = models.CharField(max_length=50, null=True, blank=True)
     price_id = models.CharField(max_length=50, null=True, blank=True)
+
     def __str__(self):
         return str(self.get_tier_display())
 
     def save(self, *args, **kwargs):
+        if self.pk:
+            # checking if price has changed
+            old_tier = Tier.objects.filter(pk=self.pk).first()
+            if old_tier.credit != self.credit:
+                price = create_stripe_price(self)
+
+                # following these instructions https://stripe.com/docs/billing/subscriptions/products-and-prices
+                # to update the subscription pricing
+                # finding all the subscriptions with the old price id
+                subscriptions = Subscription.objects.filter(price_id=self.price_id)
+                for sub_instance in subscriptions:
+                    subscription = stripe.Subscription.retrieve(sub_instance.subscription_id)
+                
+                    subscription = stripe.Subscription.modify(
+                        subscription.id,
+                        cancel_at_period_end=False,
+                        proration_behavior='create_prorations',
+                        items=[{
+                            'id': subscription['items']['data'][0].id,
+                            'price': price.id,
+                        }]
+                    )
+
+                    sub_instance.json_data = json.dumps(subscription)
+                    sub_instance.subscription_id = subscription.id
+                    # subscribe user to the new pricing
+                    sub_instance.price_id = price.id
+                    sub_instance.save()
+                
+                # update the price_id
+                self.price_id = price.id
+
         if self.tier == self.FREE:
             self.credit = Decimal("0.00")
         elif self.tier == self.TIER1:
@@ -91,26 +135,17 @@ class Benefit(models.Model):
 
 @receiver(pre_save, sender=Tier)
 def tier_updated(sender, instance, *args, **kwargs):
-
-    # create or change stripe Product
+    # create stripe Product
     if not instance.product_id:
         print(instance.credit)
         product = stripe.Product.create(name="%s - %s" % (instance.coach.name, instance.label))
         instance.product_id = product.id
     else:
-        stripe.Product.modify(
-            instance.product_id,
-            metadata={"order_id": "6735"},
-        )
+        pass
     
-    # create or update stripe Price
+    # create stripe Price
     if not instance.price_id:
-        price = stripe.Price.create(
-            unit_amount=money_to_integer(instance.credit),
-            currency=instance.credit.currency.code.lower(),
-            recurring={"interval": "month"},
-            product=instance.product_id,
-        )
+        price = create_stripe_price(instance)
         instance.price_id = price.id
 
 

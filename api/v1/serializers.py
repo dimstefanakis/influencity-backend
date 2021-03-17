@@ -1,5 +1,6 @@
 from django.db.models import Count
 from rest_framework import serializers
+from asgiref.sync import async_to_sync
 from accounts.models import User
 from instructor.models import Coach, CoachApplication
 from posts.models import Post, PostImage, PostVideo, PlaybackId
@@ -9,19 +10,23 @@ from subscribers.models import Subscriber, SubscriberAvatar, Subscription
 from expertisefields.models import ExpertiseField, ExpertiseFieldAvatar
 from tiers.models import Tier, Benefit
 from reacts.models import React
-from chat.models import ChatRoom, Message
+from chat.models import ChatRoom, Message, MessageImage
 from babel.numbers import get_currency_precision
+import channels.layers
 import stripe
 import json
 import os
 
 stripe.api_key = os.environ.get('STRIPE_SECRET_KEY')
+
+
 def money_to_integer(money):
     return int(
         money.amount * (
             10 ** get_currency_precision(money.currency.code)
         )
     )
+
 
 class CoachSerializer(serializers.ModelSerializer):
     expertise_field = serializers.StringRelatedField()
@@ -64,16 +69,17 @@ class CoachSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Coach
-        fields = ['name', 'avatar', 'bio', 'expertise_field', 'projects', 
-                'tier', 'tier_full', 'tiers', 'surrogate', 'charges_enabled']
+        fields = ['name', 'avatar', 'bio', 'expertise_field', 'projects',
+                  'tier', 'tier_full', 'tiers', 'surrogate', 'charges_enabled']
 
 
 class CoachApplicationSerializer(serializers.ModelSerializer):
     subscriber = serializers.StringRelatedField()
 
     def create(self, validated_data):
-        user =  self.context['request'].user
-        application = CoachApplication.objects.create(subscriber=user.subscriber, **validated_data)
+        user = self.context['request'].user
+        application = CoachApplication.objects.create(
+            subscriber=user.subscriber, **validated_data)
         return application
 
     class Meta:
@@ -117,12 +123,14 @@ class SubscriberUpdateSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         try:
             avatar = validated_data.pop('avatar')
-            new_avatar = SubscriberAvatar.objects.create(subscriber=instance, image=avatar)
+            new_avatar = SubscriberAvatar.objects.create(
+                subscriber=instance, image=avatar)
             #instance.avatar.image = avatar
         except KeyError:
             pass
 
-        instance = super(SubscriberUpdateSerializer, self).update(instance, validated_data)
+        instance = super(SubscriberUpdateSerializer, self).update(
+            instance, validated_data)
         return instance
 
     class Meta:
@@ -137,7 +145,8 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['username', 'email', 'is_coach', 'is_subscriber', 'coach', 'subscriber']
+        fields = ['username', 'email', 'is_coach',
+                  'is_subscriber', 'coach', 'subscriber']
 
 
 class UserMeSerializer(serializers.ModelSerializer):
@@ -148,16 +157,21 @@ class UserMeSerializer(serializers.ModelSerializer):
     def get_subscriber_data(self, user):
         if not user.coach:
             return None
-        sub_count = Subscription.objects.filter(tier__coach=user.coach).count() #user.coach.subscribers.count()
-        free_sub_count = Subscription.objects.filter(tier__tier=Tier.FREE, tier__coach=user.coach).count()
-        tier1_sub_count = Subscription.objects.filter(tier__tier=Tier.TIER1, tier__coach=user.coach).count()
-        tier2_sub_count = Subscription.objects.filter(tier__tier=Tier.TIER2, tier__coach=user.coach).count()
+        sub_count = Subscription.objects.filter(
+            tier__coach=user.coach).count()  # user.coach.subscribers.count()
+        free_sub_count = Subscription.objects.filter(
+            tier__tier=Tier.FREE, tier__coach=user.coach).count()
+        tier1_sub_count = Subscription.objects.filter(
+            tier__tier=Tier.TIER1, tier__coach=user.coach).count()
+        tier2_sub_count = Subscription.objects.filter(
+            tier__tier=Tier.TIER2, tier__coach=user.coach).count()
         return {'subscribers_count': sub_count, 'free_subscribers_count': free_sub_count,
                 'tier1_subscribers_count': tier1_sub_count, 'tier2_subscribers_count': tier2_sub_count}
 
     class Meta:
         model = User
-        fields = ['username', 'email', 'is_coach', 'is_subscriber', 'coach', 'subscriber', 'subscriber_data']
+        fields = ['username', 'email', 'is_coach', 'is_subscriber',
+                  'coach', 'subscriber', 'subscriber_data']
 
 
 class UserMeNoCoachSerializer(serializers.ModelSerializer):
@@ -165,7 +179,8 @@ class UserMeNoCoachSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['username', 'email', 'is_coach', 'is_subscriber', 'subscriber']
+        fields = ['username', 'email', 'is_coach',
+                  'is_subscriber', 'subscriber']
 
 
 class PrerequisiteSerializer(serializers.ModelSerializer):
@@ -200,8 +215,10 @@ class MilestoneSerializer(serializers.ModelSerializer):
 
 
 class CreateMilestoneCompletionReportSerializer(serializers.ModelSerializer):
-    members = serializers.ListField(child=serializers.UUIDField(), write_only=True)
-    images = serializers.ListField(child=serializers.ImageField(), write_only=True, required=False)
+    members = serializers.ListField(
+        child=serializers.UUIDField(), write_only=True)
+    images = serializers.ListField(
+        child=serializers.ImageField(), write_only=True, required=False)
 
     def create(self, validated_data):
         milestone_id = self.context['milestone_id']
@@ -216,16 +233,18 @@ class CreateMilestoneCompletionReportSerializer(serializers.ModelSerializer):
         except KeyError:
             members = []
 
-        milestone_report = MilestoneCompletionReport.objects.create(milestone_id=milestone_id, **validated_data)
+        milestone_report = MilestoneCompletionReport.objects.create(
+            milestone_id=milestone_id, **validated_data)
 
         for image in images:
-            MilestoneCompletionImage.objects.create(milestone_completion_report=milestone_report, image=image)
+            MilestoneCompletionImage.objects.create(
+                milestone_completion_report=milestone_report, image=image)
 
         for member in members:
             _member = Subscriber.objects.filter(surrogate=member)
             milestone_report.members.set(_member)
         return milestone_report
-    
+
     class Meta:
         model = MilestoneCompletionReport
         fields = ['surrogate', 'members', 'message', 'milestone', 'images']
@@ -255,14 +274,18 @@ class ProjectSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Project
-        fields = ['name', 'description', 'difficulty', 'team_size', 'prerequisites', 'milestones', 'id']
+        fields = ['name', 'description', 'difficulty',
+                  'team_size', 'prerequisites', 'milestones', 'id']
 
 
 class CreateOrUpdateProjectSerializer(serializers.ModelSerializer):
     # the below 2 contain a list of descriptions for both prerequisites and milestones
-    prerequisites = serializers.ListField(child=serializers.CharField(), write_only=True, required=False)
-    milestones = serializers.ListField(child=serializers.JSONField(), write_only=True, required=False)
-    attached_posts = serializers.ListField(child=serializers.UUIDField(), write_only=True, required=False)
+    prerequisites = serializers.ListField(
+        child=serializers.CharField(), write_only=True, required=False)
+    milestones = serializers.ListField(
+        child=serializers.JSONField(), write_only=True, required=False)
+    attached_posts = serializers.ListField(
+        child=serializers.UUIDField(), write_only=True, required=False)
 
     def create(self, validated_data):
         coach = self.context['request'].user.coach
@@ -284,7 +307,7 @@ class CreateOrUpdateProjectSerializer(serializers.ModelSerializer):
 
         project = Project.objects.create(coach=coach, **validated_data)
 
-        # alternatively instead of iterating create a queryset from the 'attached_posts' and 
+        # alternatively instead of iterating create a queryset from the 'attached_posts' and
         # add it to the linked_project using the asterisk notation
         for post_id in attached_posts:
             post = Post.objects.get(surrogate=post_id)
@@ -292,12 +315,14 @@ class CreateOrUpdateProjectSerializer(serializers.ModelSerializer):
             post.save()
 
         for prerequisite in prerequisites:
-            Prerequisite.objects.create(description=prerequisite, project=project)
+            Prerequisite.objects.create(
+                description=prerequisite, project=project)
 
         for milestone in milestones:
             milestone = json.loads(milestone)
-            Milestone.objects.create(description=milestone['description'], project=project)
-        
+            Milestone.objects.create(
+                description=milestone['description'], project=project)
+
         return project
 
     def update(self, instance, validated_data):
@@ -311,7 +336,8 @@ class CreateOrUpdateProjectSerializer(serializers.ModelSerializer):
         # prerequisites are safe to delete and recreate
         instance.prerequisites.all().delete()
         for prerequisite in prerequisites:
-            Prerequisite.objects.create(description=prerequisite, project=instance)
+            Prerequisite.objects.create(
+                description=prerequisite, project=instance)
 
         # milestones need to be iterated and updated separately since they have
         # multiple relations attached to them
@@ -322,14 +348,16 @@ class CreateOrUpdateProjectSerializer(serializers.ModelSerializer):
 
         for milestone in milestones:
             milestone = json.loads(milestone)
-            #try:
-            milestone_instance = Milestone.objects.filter(surrogate=milestone['id'])
+            # try:
+            milestone_instance = Milestone.objects.filter(
+                surrogate=milestone['id'])
             if milestone_instance.exists():
                 milestone_instance = milestone_instance.first()
                 milestone_instance.description = milestone['description']
                 milestone_instance.save()
             else:
-                Milestone.objects.create(description=milestone['description'], project=instance)
+                Milestone.objects.create(
+                    description=milestone['description'], project=instance)
             # error might be thrown if the provided id is not a valid pk
             # except Exception as e:
                 # Milestone.objects.create(description=milestone['description'], project=instance)
@@ -345,13 +373,14 @@ class CreateOrUpdateProjectSerializer(serializers.ModelSerializer):
             post = Post.objects.get(surrogate=post_id)
             post.linked_project = project
             post.save()
-        instance = super(CreateOrUpdateProjectSerializer, self).update(instance, validated_data)
+        instance = super(CreateOrUpdateProjectSerializer,
+                         self).update(instance, validated_data)
         return instance
 
     class Meta:
         model = Project
-        fields = ['name', 'description', 'difficulty', 'team_size', 
-                'prerequisites', 'milestones', 'attached_posts', 'id', 'surrogate']
+        fields = ['name', 'description', 'difficulty', 'team_size',
+                  'prerequisites', 'milestones', 'attached_posts', 'id', 'surrogate']
         read_only_fields = ['id', 'surrogate']
 
 
@@ -424,8 +453,8 @@ class PostSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Post
-        fields = ['status','text', 'coach', 'images', 'videos', 'tier', 'tiers', 
-        'chained_posts', 'id', 'linked_project', 'reacted', 'reacts']
+        fields = ['status', 'text', 'coach', 'images', 'videos', 'tier', 'tiers',
+                  'chained_posts', 'id', 'linked_project', 'reacted', 'reacts']
 
     def get_fields(self):
         fields = super(PostSerializer, self).get_fields()
@@ -444,12 +473,13 @@ class PostNoChainSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Post
-        fields = ['status','text', 'images', 'videos', 'id', 'linked_project']
+        fields = ['status', 'text', 'images', 'videos', 'id', 'linked_project']
 
 
 class PostCreateSerializer(serializers.ModelSerializer):
     coach = CoachSerializer(required=False)
-    images = serializers.ListField(child=serializers.ImageField(), write_only=True, required=False)
+    images = serializers.ListField(
+        child=serializers.ImageField(), write_only=True, required=False)
     # tier = serializers.IntegerField(required=True)
     linked_project = serializers.UUIDField(required=False)
     has_videos = serializers.BooleanField(required=False)
@@ -485,7 +515,8 @@ class PostCreateSerializer(serializers.ModelSerializer):
 
         linked_project = None
         if linked_project_surrogate:
-            linked_project = Project.objects.filter(surrogate=linked_project_surrogate).first()
+            linked_project = Project.objects.filter(
+                surrogate=linked_project_surrogate).first()
 
         try:
             has_videos = validated_data.pop('has_videos')
@@ -493,9 +524,9 @@ class PostCreateSerializer(serializers.ModelSerializer):
         except KeyError:
             status = Post.DONE
 
-        post = Post.objects.create(coach=coach, 
-            status=status, linked_project=linked_project, **validated_data)
-        
+        post = Post.objects.create(coach=coach,
+                                   status=status, linked_project=linked_project, **validated_data)
+
         for image in images:
             PostImage.objects.create(post=post, coach=coach, image=image)
         # post.tiers.set(tiers)
@@ -504,8 +535,10 @@ class PostCreateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Post
-        fields = ['tier', 'text', 'images', 'videos', 'id', 'linked_project', 'chained_posts', 'coach', 'has_videos']
-        read_only_fields = ['id', 'chained_posts', 'coach', 'videos', 'reacted', 'reacts', 'status']
+        fields = ['tier', 'text', 'images', 'videos', 'id',
+                  'linked_project', 'chained_posts', 'coach', 'has_videos']
+        read_only_fields = ['id', 'chained_posts', 'coach',
+                            'videos', 'reacted', 'reacts', 'status']
 
 
 class ChainedPostsSerializer(serializers.Serializer):
@@ -638,7 +671,8 @@ class CommentSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Comment
-        fields = ['id', 'text', 'images', 'user', 'level', 'parent', 'reply_count']
+        fields = ['id', 'text', 'images', 'user',
+                  'level', 'parent', 'reply_count']
 
 
 class CreateCommentSerializer(serializers.ModelSerializer):
@@ -671,7 +705,8 @@ class CreateCommentSerializer(serializers.ModelSerializer):
         # if this comment is a reply to another comment get the parent posts author
         reply_to = parent.user if parent else None
 
-        comment = Comment.objects.create(user=user.subscriber, parent=parent, reply_to=reply_to, **validated_data)
+        comment = Comment.objects.create(
+            user=user.subscriber, parent=parent, reply_to=reply_to, **validated_data)
         comment.images.set(images)
 
         return comment
@@ -727,7 +762,8 @@ class MyProjectsSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Project
-        fields = ['name', 'description', 'difficulty', 'team_size', 'my_team', 'prerequisites', 'milestones', 'id']
+        fields = ['name', 'description', 'difficulty', 'team_size',
+                  'my_team', 'prerequisites', 'milestones', 'id']
         read_only_fields = ['id', 'my_team']
 
 
@@ -810,13 +846,15 @@ class TierSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Tier
-        fields = ['id', 'surrogate', 'tier', 'tier_full', 'label', 'subheading', 'credit', 'benefits']
+        fields = ['id', 'surrogate', 'tier', 'tier_full',
+                  'label', 'subheading', 'credit', 'benefits']
         read_only_fields = ['id', 'surrogate', 'tier', 'tier_full']
 
 
 class UpdateTierSerializer(serializers.ModelSerializer):
     tier_full = serializers.SerializerMethodField()
-    benefits = serializers.ListField(child=serializers.JSONField(), write_only=True, required=False)
+    benefits = serializers.ListField(
+        child=serializers.JSONField(), write_only=True, required=False)
 
     def get_tier_full(self, obj):
         return obj.get_tier_display()
@@ -833,7 +871,8 @@ class UpdateTierSerializer(serializers.ModelSerializer):
             benefit_id = benefit.get('id', None)
             if benefit_id:
                 if Benefit.objects.filter(id=benefit_id).exists():
-                    update_benefit = Benefit.objects.filter(id=benefit_id).first()
+                    update_benefit = Benefit.objects.filter(
+                        id=benefit_id).first()
                     update_benefit.description = description
                     update_benefit.save()
             else:
@@ -852,7 +891,8 @@ class UpdateTierSerializer(serializers.ModelSerializer):
         except KeyError:
             pass
 
-        instance = super(UpdateTierSerializer, self).update(instance, validated_data)
+        instance = super(UpdateTierSerializer, self).update(
+            instance, validated_data)
         return instance
 
     def to_representation(self, instance):
@@ -863,7 +903,8 @@ class UpdateTierSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Tier
-        fields = ['id', 'tier', 'tier_full', 'label', 'subheading', 'credit', 'benefits']
+        fields = ['id', 'tier', 'tier_full', 'label',
+                  'subheading', 'credit', 'benefits']
         read_only_fields = ['id', 'tier', 'tier_full']
 
 
@@ -882,16 +923,86 @@ class ChatRoomSerializer(serializers.ModelSerializer):
         fields = ['id', 'name', 'type', 'members', 'project']
 
 
+class MessageImageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MessageImage
+        fields = ['image', 'height', 'width']
+
+
 class MessageSerializer(serializers.ModelSerializer):
     user = SubscriberSerializer()
+    images = serializers.SerializerMethodField()
     id = serializers.SerializerMethodField()
+
+    def get_images(self, message):
+        return MessageImageSerializer(message.images.all(), many=True).data
 
     def get_id(self, message):
         return message.surrogate
 
     class Meta:
         model = Message
-        fields = ['text', 'created', 'user', 'id']
+        fields = ['text', 'created', 'user', 'images', 'id']
+
+
+class CreateMessageSerializer(serializers.ModelSerializer):
+    # message = MessageSerializer(required=False)
+    images = serializers.ListField(
+        child=serializers.ImageField(), write_only=False, required=False)
+    chat_room = serializers.UUIDField(required=False)
+
+    def create(self, validated_data):
+        user = self.context['request'].user.subscriber
+
+        try:
+            images = validated_data.pop('images')
+        except KeyError:
+            images = []
+
+        try:
+            chat_room_surrogate = validated_data.pop('chat_room')
+        except KeyError:
+            chat_room_surrogate = None
+
+        if chat_room_surrogate:
+            chat_room = ChatRoom.objects.filter(surrogate=chat_room_surrogate)
+
+        message = Message.objects.create(
+            user=user, chat_room=chat_room.first(), **validated_data)
+
+        # images_sent will be the object sent to the channel group
+        images_sent = []
+        for image in images:
+            message_image = MessageImage.objects.create(
+                message=message, image=image)
+            images_sent.append({'height': message_image.height,
+                               'width': message_image.width, 'image': message_image.image.url})
+
+        channel_layer = channels.layers.get_channel_layer()
+        # after message is created send it back to the group chat
+        # a better idea is maybe to add this on a post_save signal
+        async_to_sync(channel_layer.group_send)(
+            'chat_%s' % chat_room_surrogate,
+            {
+                'type': 'chat.message',
+                'message': message.text,
+                'message_id': str(message.surrogate),
+                'images': json.dumps(images_sent),
+                'user_id': str(message.user.surrogate),
+                'user_name': message.user.name,
+                'user_avatar': message.user.avatar.image.url,
+                'room': str(message.chat_room.surrogate)
+            }
+        )
+
+        return {
+            "id": message.surrogate
+        }
+
+    class Meta:
+        model = Message
+        fields = ['created', 'updated', 'chat_room', 'user', 'text', 'images']
+        read_only_fields = ['created', 'updated', 'user']
 
 
 class GenericNotificationRelatedField(serializers.RelatedField):

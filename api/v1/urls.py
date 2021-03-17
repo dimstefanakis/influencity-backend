@@ -33,6 +33,7 @@ router.register(r'notifications', views.NotificationsViewSet, basename="notifica
 router.register(r'my_chat_rooms/(?P<surrogate>[0-9a-f-]+)/messages', views.RoomMessagesViewSet,
                 basename="chat_rooms_messages")
 router.register(r'my_chat_rooms', views.MyChatRoomsViewSet, basename="my_chat_rooms")
+router.register(r'create_message', views.CreateMessageViewSet, basename="create_message")
 
 urlpatterns = [
     path('v1/', include(router.urls)),

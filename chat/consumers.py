@@ -1,5 +1,7 @@
 # chat/consumers.py
 import json
+from asgiref.sync import async_to_sync
+from channels.auth import get_user
 from channels.generic.websocket import WebsocketConsumer, AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from subscribers.models import Subscriber
@@ -8,6 +10,7 @@ from chat.models import Message, ChatRoom
 
 class ChatConsumer(AsyncWebsocketConsumer):
     async def connect(self):
+        # self.user = await self.get_subscriber(self.scope['user'])
         self.room_name = self.scope['url_route']['kwargs']['room_name']
         self.room_group_name = 'chat_%s' % self.room_name
 
@@ -27,14 +30,14 @@ class ChatConsumer(AsyncWebsocketConsumer):
         )
 
     async def receive(self, text_data):
+        self.user = await self.get_subscriber(self.scope['user'])
         data = json.loads(text_data)
+        subscriber = self.user
         message = data['text']
-        user = data['user']
         room = data['room']
         self.room = await self.get_chat_room(room)
-        self.user = await self.get_user(user)
-        self.user_avatar = await self.get_user_avatar(user)
-        new_message = await self.create_message(text=message, user=self.user, room=self.room)
+        self.user_avatar = await self.get_subscriber_avatar(subscriber) #await self.get_user_avatar(user)
+        new_message = await self.create_message(text=message, user=subscriber, room=self.room)
         try:
             avatar = self.user_avatar.image.url
         except KeyError:
@@ -46,7 +49,10 @@ class ChatConsumer(AsyncWebsocketConsumer):
             {
                 'type': 'chat_message',
                 'message': new_message.text,
-                'message_id': new_message.id,
+                # messages incoming to this websocket will not handle images
+                # image messages are handle through a regular http api request
+                'images': json.dumps([]),
+                'message_id': str(new_message.surrogate),
                 'user_id': str(new_message.user.surrogate),
                 'user_name': new_message.user.name,
                 'user_avatar': avatar,
@@ -61,6 +67,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
         user_id = event['user_id']
         user_name = event['user_name']
         user_avatar = event['user_avatar']
+        images = event['images']
         room = event['room']
 
         # Send message to WebSocket
@@ -70,6 +77,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
             'user_id': user_id,
             'user_name': user_name,
             'user_avatar': user_avatar,
+            'images': images,
             'room': room
         }))
 
@@ -88,3 +96,11 @@ class ChatConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def create_message(self, text, user, room):
         return Message.objects.create(text=text, user=user, chat_room=room)
+
+    @database_sync_to_async
+    def get_subscriber(self, user):
+        return user.subscriber
+
+    @database_sync_to_async
+    def get_subscriber_avatar(self, subscriber):
+        return subscriber.avatar

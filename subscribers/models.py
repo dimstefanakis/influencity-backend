@@ -37,6 +37,9 @@ class Subscription(models.Model):
     tier = models.ForeignKey('tiers.Tier', on_delete=models.CASCADE, related_name="subscriptions", null=True, blank=True)
     subscription_id = models.CharField(max_length=30, null=True, blank=True)
     customer_id = models.CharField(max_length=30, null=True, blank=True)
+    # although this is available through the tier, tier always has the up to date price_id
+    # but we sometimes need the old price_id
+    price_id = models.CharField(max_length=30, null=True, blank=True, db_index=True)
     json_data = JSONField(null=True, blank=True)
 
 
