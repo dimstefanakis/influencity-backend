@@ -10,7 +10,7 @@ class NotificationConsumer(AsyncWebsocketConsumer):
 
         # join user specific layer
         await self.channel_layer.group_add(
-            f"{str(user.surrogate)}.notitifactions.group",
+            f"{str(user.surrogate)}.notifications.group",
             self.channel_name
         )
 
@@ -21,7 +21,7 @@ class NotificationConsumer(AsyncWebsocketConsumer):
         
         # disconnect from group
         await self.channel_layer.group_discard(
-            f"{str(user.surrogate)}.notitifactions.group",
+            f"{str(user.surrogate)}.notifications.group",
             self.channel_name
         )
 

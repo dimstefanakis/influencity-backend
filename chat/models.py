@@ -1,12 +1,15 @@
 from django.db import models
-from django.db.models.signals import m2m_changed
+from django.db.models.signals import m2m_changed, post_save
 from django.dispatch import receiver
+from notifications.signals import notify
+from asgiref.sync import async_to_sync
+import channels.layers
 from accounts.models import User
 from subscribers.models import Subscriber
 from projects.models import Project, Team
 from common.models import CommonImage
 from uuid import uuid4, uuid1
-
+import re
 
 class ChatRoom(models.Model):
     surrogate = models.UUIDField(default=uuid4, unique=True, db_index=True)
@@ -70,3 +73,27 @@ def chat_room_members_changes(sender, instance, **kwargs):
         # if there are no members left in the chat room delete it
         if instance.members.count() == 0:
             instance.delete()
+
+@receiver(post_save, sender=Message, dispatch_uid="message_created")
+def message_created(sender, instance, created, **kwargs):
+    if created:
+        channel_layer = channels.layers.get_channel_layer()
+
+        # search for mentions in message and send notifications
+        mentions = re.findall('@[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}', instance.text)
+        for mention in mentions:
+            user_id = mention[1:]
+            subscriber = Subscriber.objects.filter(surrogate=user_id)
+
+            if subscriber.exists():
+                notification_data = notify.send(instance.user, recipient=subscriber.first().user, 
+                                                verb='mentioned you', action_object=instance.chat_room)
+
+                notification = notification_data[0][1][0]
+                async_to_sync(channel_layer.group_send)(
+                    f"{str(subscriber.first().surrogate)}.notifications.group",
+                    {
+                        'type': 'send.notification',
+                        'id': notification.id
+                    }
+                )

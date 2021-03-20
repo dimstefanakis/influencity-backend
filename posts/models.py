@@ -81,19 +81,19 @@ class PlaybackId(models.Model):
 # notifications sent to the subscribers after the coach posts
 @receiver(post_save, sender=Post, dispatch_uid="post_created")
 def post_created(sender, instance, created, **kwargs):
-    # if created
-    channel_layer = channels.layers.get_channel_layer()
-    for sub in instance.tier.subscribers.all():
-        notification_data = notify.send(instance.coach, recipient=sub, verb='just posted', action_object=instance)
+    if created:
+        channel_layer = channels.layers.get_channel_layer()
+        for sub in instance.tier.subscribers.all():
+            notification_data = notify.send(instance.coach, recipient=sub, verb='just posted', action_object=instance)
 
-        # this is the first time I am doing this
-        # I don't honestly know why I am able to get the created the notification like this
-        # but I cannot find an alternative so I will use it throughout this app
-        notification = notification_data[0][1][0]
-        async_to_sync(channel_layer.group_send)(
-            f"{str(sub.surrogate)}.notitifactions.group",
-            {
-                'type': 'send.notification',
-                'id': notification.id
-            }
-        )
+            # this is the first time I am doing this
+            # I don't honestly know why I am able to get the created the notification like this
+            # but I cannot find an alternative so I will use it throughout this app
+            notification = notification_data[0][1][0]
+            async_to_sync(channel_layer.group_send)(
+                f"{str(sub.surrogate)}.notifications.group",
+                {
+                    'type': 'send.notification',
+                    'id': notification.id
+                }
+            )

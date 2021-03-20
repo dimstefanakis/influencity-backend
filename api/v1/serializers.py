@@ -911,12 +911,16 @@ class UpdateTierSerializer(serializers.ModelSerializer):
 class ChatRoomSerializer(serializers.ModelSerializer):
     id = serializers.SerializerMethodField()
     project = serializers.SerializerMethodField()
+    members = serializers.SerializerMethodField()
 
     def get_id(self, chat_room):
         return chat_room.surrogate
 
     def get_project(self, chat_room):
         return chat_room.project.surrogate
+
+    def get_members(self, chat_room):
+        return SubscriberSerializer(chat_room.members.all(), many=True).data
 
     class Meta:
         model = ChatRoom
@@ -1013,6 +1017,8 @@ class GenericNotificationRelatedField(serializers.RelatedField):
             serializers = SubscriberSerializer(value)
         if isinstance(value, Coach):
             serializers = CoachSerializer(value)
+        if isinstance(value, ChatRoom):
+            serializers = ChatRoomSerializer(value)
         return serializers.data
 
 
