@@ -41,6 +41,7 @@ urlpatterns = [
     path('v1/subscribe/<uuid:id>', views.subscribe, name="subscribe"),
     path('v1/join_project/<uuid:id>', views.join_project, name="join_project"),
     path('v1/unread_notifications_count/', views.get_unread_count, name="get_unread_count"),
+    path('v1/mark_all_notifications_as_read/', views.mark_all_read, name="mark_all_notifications_as_read"),
     path('v1/attach_payment_method/', views.attach_payment_method, name="attach_payment_method"),
     path('v1/upload_video/', views.upload_video, name="upload_video"),
     path('v1/upload_milestonecompletion_video/', views.upload_milestonecompletion_video, name="upload_milestonecompletion_video"),
@@ -51,4 +52,3 @@ urlpatterns = [
     path('v1/get_stripe_login_link/', views.get_stripe_login, name="get_stripe_login_link"),
     path('v1/posts/<uuid:id>/change_react/', views.change_or_delete_react, name="change_or_delete_react"),
 ]
-

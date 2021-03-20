@@ -400,6 +400,13 @@ def get_unread_count(request):
     return Response({'unread_count': request.user.notifications.unread().count()})
 
 
+@api_view(http_method_names=['POST'])
+@permission_classes((permissions.IsAuthenticated,))
+def mark_all_read(request):
+    request.user.notifications.mark_all_as_read()
+    return Response({'unread_count': request.user.notifications.unread().count()})
+
+
 @api_view(http_method_names=['GET', 'PATCH'])
 @permission_classes((permissions.IsAuthenticated,))
 def subscriber_me(request):

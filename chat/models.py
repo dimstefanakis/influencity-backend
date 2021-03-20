@@ -91,7 +91,7 @@ def message_created(sender, instance, created, **kwargs):
 
                 notification = notification_data[0][1][0]
                 async_to_sync(channel_layer.group_send)(
-                    f"{str(subscriber.first().surrogate)}.notifications.group",
+                    f"{str(subscriber.first().user.surrogate)}.notifications.group",
                     {
                         'type': 'send.notification',
                         'id': notification.id
