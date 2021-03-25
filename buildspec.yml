@@ -8,12 +8,12 @@ phases:
   pre_build: 
     commands: 
     - echo Logging in to Amazon ECR....
-    - pip install awscli==1.19.18
+    # - pip install awscli==1.19.18
     - aws --version
     # update the following line with your own region
 
-    # - $(aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws/t2o0q9j8)
-    - $(aws ecr get-login --no-include-email --region us-east-1)
+    - $(aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws/t2o0q9j8)
+    # - $(aws ecr get-login --no-include-email --region us-east-1)
     - COMMIT_HASH=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
     - IMAGE_TAG=${COMMIT_HASH:=latest}
     - REPOSITORY_URI=public.ecr.aws/t2o0q9j8/troosh 
