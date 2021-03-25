@@ -8,11 +8,11 @@ phases:
   pre_build: 
     commands: 
     - echo Logging in to Amazon ECR....
-    - pip install awscli==1.19.18
+    # - pip install awscli==1.19.18
     - aws --version
     # update the following line with your own region
     # - $(aws ecr get-login-password --region eu-west-2 | docker login --username AWS --password-stdin 274008408544.dkr.ecr.eu-west-2.amazonaws.com)
-    - $(aws ecr get-login --no-include-email --region us-west-2)
+    - $(aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws/t2o0q9j8)
     - COMMIT_HASH=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
     - IMAGE_TAG=${COMMIT_HASH:=latest}
     - REPOSITORY_URI=public.ecr.aws/t2o0q9j8/troosh 
@@ -21,9 +21,11 @@ phases:
     - echo Build started on `date` 
     - echo Building the Docker image... 
     # update the following line with the name of your own ECR repository
-    - docker build -t $REPOSITORY_URI:latest .
+    # - docker build -t $REPOSITORY_URI:latest .
+    - docker build -t troosh .
     # update the following line with the URI of your own ECR repository (view the Push Commands in the console)
-    - docker tag $REPOSITORY_URI:latest $REPOSITORY_URI:$IMAGE_TAG 
+    # - docker tag $REPOSITORY_URI:latest $REPOSITORY_URI:$IMAGE_TAG 
+    - docker tag troosh:latest $REPOSITORY_URI:latest
   post_build: 
     commands: 
     - echo Build completed on `date` 
