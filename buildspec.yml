@@ -8,7 +8,7 @@ phases:
   pre_build: 
     commands: 
     - echo Logging in to Amazon ECR....
-    - pip install awscli==1.16.35
+    - pip install awscli==1.19.18
     - aws --version
     # update the following line with your own region
     # - $(aws ecr get-login-password --region eu-west-2 | docker login --username AWS --password-stdin 274008408544.dkr.ecr.eu-west-2.amazonaws.com)
