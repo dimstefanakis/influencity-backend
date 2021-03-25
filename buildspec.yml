@@ -4,7 +4,7 @@ phases:
     commands: 
       - apt-get upgrade
       - apt-get install zip
-      - apt-get install -y --no-install-recommends unixodbc-dev unixodbc libpq-dev
+      - apt-get install unixodbc-dev unixodbc libpq-dev
   pre_build: 
     commands: 
     - echo Logging in to Amazon ECR.... 
