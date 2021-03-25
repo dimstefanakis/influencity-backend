@@ -35,16 +35,19 @@ class CoachSerializer(serializers.ModelSerializer):
     tier = serializers.SerializerMethodField()
     tiers = serializers.SerializerMethodField()
     tier_full = serializers.SerializerMethodField()
-
-    @staticmethod
-    def get_projects(coach):
-        return ProjectSerializer(coach.created_projects.all(), many=True).data
+    number_of_projects_joined = serializers.SerializerMethodField()
 
     @staticmethod
     def get_avatar(coach):
         if coach.avatar:
             return coach.avatar.image.url
         return None
+
+    def get_projects(self, coach):
+        context = {
+            "request": self.context["request"]
+        }
+        return ProjectSerializer(coach.created_projects.all(), many=True, context=context).data
 
     def get_tier(self, coach):
         try:
@@ -64,12 +67,24 @@ class CoachSerializer(serializers.ModelSerializer):
         except KeyError:
             return None
 
+    # get number of projects the user has subscribed to for this coach
+    # this is used for frontend validation because Tier 1 subscribers only have access to one project
+    # and free subs have access to none
+    def get_number_of_projects_joined(self, coach):
+        try:
+            user = self.context['request'].user
+            if user.is_authenticated:
+                if user.subscriber.subscriptions.filter(tier__coach=coach).exists():
+                    return Team.objects.filter(project__coach=coach, members__in=[user.subscriber]).count()
+        except KeyError:
+            return None
+
     def get_tiers(self, coach):
         return TierSerializer(coach.tiers.all(), many=True).data
 
     class Meta:
         model = Coach
-        fields = ['name', 'avatar', 'bio', 'expertise_field', 'projects',
+        fields = ['name', 'avatar', 'bio', 'expertise_field', 'projects', 'number_of_projects_joined',
                   'tier', 'tier_full', 'tiers', 'surrogate', 'charges_enabled']
 
 
@@ -264,6 +279,8 @@ class ProjectSerializer(serializers.ModelSerializer):
     prerequisites = PrerequisiteSerializer(many=True)
     milestones = MilestoneSerializer(many=True)
     difficulty = serializers.SerializerMethodField()
+    linked_posts_count = serializers.SerializerMethodField()
+    coach_data = serializers.SerializerMethodField()
     id = serializers.SerializerMethodField()
 
     def get_id(self, project):
@@ -271,11 +288,32 @@ class ProjectSerializer(serializers.ModelSerializer):
 
     def get_difficulty(self, project):
         return project.get_difficulty_display()
+    
+    def get_linked_posts_count(self, project):
+        return project.posts.count()
+
+    def get_coach_data(self, project):
+        number_of_projects_joined = None
+        my_tier = None
+
+        try:
+            user = self.context['request'].user
+            if user.is_authenticated:
+                if user.subscriber.subscriptions.filter(tier__coach=project.coach).exists():
+                    subscription = user.subscriber.subscriptions.filter(tier__coach=project.coach).first()
+                    my_tier = subscription.tier
+                    number_of_projects_joined = Team.objects.filter(project__coach=project.coach, members__in=[user.subscriber]).count()
+        except KeyError:
+            number_of_projects_joined = None
+        
+        return {'number_of_projects_joined': number_of_projects_joined, "id": project.coach.surrogate, "my_tier": TierSerializer(my_tier).data}
+
 
     class Meta:
         model = Project
-        fields = ['name', 'description', 'difficulty',
-                  'team_size', 'prerequisites', 'milestones', 'id']
+        fields = ['name', 'description', 'difficulty', 'linked_posts_count',
+                  'team_size', 'prerequisites', 'milestones', 'coach_data', 'id']
+        read_only_fields = ['linked_posts', 'coach_data']
 
 
 class CreateOrUpdateProjectSerializer(serializers.ModelSerializer):
@@ -459,6 +497,40 @@ class PostSerializer(serializers.ModelSerializer):
     def get_fields(self):
         fields = super(PostSerializer, self).get_fields()
         fields['chained_posts'] = PostSerializer(many=True)
+        return fields
+
+
+class PostWithoutProjectSerializer(serializers.ModelSerializer):
+    coach = CoachSerializer()
+    images = PostImageSerializer(many=True)
+    videos = PostVideoSerializer(many=True)
+    reacted = serializers.SerializerMethodField()
+    reacts = serializers.SerializerMethodField()
+    id = serializers.SerializerMethodField()
+
+    def get_id(self, post):
+        return post.surrogate
+
+    def get_reacted(self, post):
+        try:
+            user = self.context['request'].user
+            if user.reacts.filter(object_id=post.id, user=user).exists():
+                return True
+            return False
+        except KeyError:
+            return None
+
+    def get_reacts(self, post):
+        return post.reacts.count()
+
+    class Meta:
+        model = Post
+        fields = ['status', 'text', 'coach', 'images', 'videos', 'tier', 'tiers',
+                  'chained_posts', 'id', 'reacted', 'reacts']
+
+    def get_fields(self):
+        fields = super(PostWithoutProjectSerializer, self).get_fields()
+        fields['chained_posts'] = PostWithoutProjectSerializer(many=True)
         return fields
 
 
@@ -722,6 +794,8 @@ class MyProjectsSerializer(serializers.ModelSerializer):
     difficulty = serializers.SerializerMethodField()
     milestones = serializers.SerializerMethodField()
     my_team = serializers.SerializerMethodField()
+    coach_data = serializers.SerializerMethodField()
+    linked_posts_count = serializers.SerializerMethodField()
     id = serializers.SerializerMethodField()
 
     def get_id(self, project):
@@ -757,14 +831,33 @@ class MyProjectsSerializer(serializers.ModelSerializer):
                                 'reports': MilestoneCompletionReportSerializer(reports, many=True).data})
         return _milestones
 
+    def get_coach_data(self, project):
+        number_of_projects_joined = None
+        my_tier = None
+
+        try:
+            user = self.context['request'].user
+            if user.is_authenticated:
+                if user.subscriber.subscriptions.filter(tier__coach=project.coach).exists():
+                    subscription = user.subscriber.subscriptions.filter(tier__coach=project.coach).first()
+                    my_tier = subscription.tier
+                    number_of_projects_joined = Team.objects.filter(project__coach=project.coach, members__in=[user.subscriber]).count()
+        except KeyError:
+            number_of_projects_joined = None
+        
+        return {'number_of_projects_joined': number_of_projects_joined, "id": project.coach.surrogate, "my_tier": TierSerializer(my_tier).data}
+
     def get_difficulty(self, obj):
         return obj.get_difficulty_display()
 
+    def get_linked_posts_count(self, project):
+        return project.posts.count()
+
     class Meta:
         model = Project
-        fields = ['name', 'description', 'difficulty', 'team_size',
-                  'my_team', 'prerequisites', 'milestones', 'id']
-        read_only_fields = ['id', 'my_team']
+        fields = ['name', 'description', 'difficulty', 'team_size', 'coach_data',
+                  'my_team', 'prerequisites', 'milestones', 'linked_posts_count', 'id']
+        read_only_fields = ['id', 'my_team', 'linked_posts', 'coach_data']
 
 
 class MyTeamsSerializer(serializers.ModelSerializer):
@@ -1011,12 +1104,15 @@ class CreateMessageSerializer(serializers.ModelSerializer):
 
 class GenericNotificationRelatedField(serializers.RelatedField):
     def to_representation(self, value):
+        request = self.context.get('request', None)
+        context = {'request': request} if request else None
+
         if isinstance(value, Post):
-            serializers = PostSerializer(value)
+            serializers = PostSerializer(value, context=context)
         if isinstance(value, Subscriber):
-            serializers = SubscriberSerializer(value)
+            serializers = SubscriberSerializer(value, context=context)
         if isinstance(value, Coach):
-            serializers = CoachSerializer(value)
+            serializers = CoachSerializer(value, context=context)
         if isinstance(value, ChatRoom):
             serializers = ChatRoomSerializer(value)
         return serializers.data

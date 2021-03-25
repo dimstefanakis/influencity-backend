@@ -2,7 +2,7 @@ from django.db import models
 from django.db.models.signals import pre_save, post_save
 from django.dispatch import receiver
 from django.contrib.contenttypes.fields import GenericRelation
-from smart_selects.db_fields import ChainedManyToManyField
+from smart_selects.db_fields import ChainedManyToManyField, ChainedForeignKey
 from notifications.signals import notify
 from notifications.models import Notification
 from asgiref.sync import async_to_sync
@@ -40,7 +40,14 @@ class Post(models.Model):
         related_name="all_posts",
         horizontal=True,
         null=True)
-    tier = models.ForeignKey(Tier, on_delete=models.CASCADE, related_name="posts", null=True)
+    tier = ChainedForeignKey(
+        Tier,
+        chained_field="coach",
+        chained_model_field="coach",
+        auto_choose=True,
+        related_name="posts",
+        null=True)
+    # tier = models.ForeignKey(Tier, on_delete=models.CASCADE, related_name="posts", null=True)
     status = models.CharField(max_length=2, choices=STATUS_CHOICES, default=PROCESSING)
     
     def save(self, *args, **kwargs):

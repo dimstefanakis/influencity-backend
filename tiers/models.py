@@ -31,6 +31,7 @@ def create_stripe_price(instance):
 
     return price
 
+
 class Tier(models.Model):
     class Meta:
         constraints = [
@@ -128,6 +129,7 @@ class Tier(models.Model):
 class Benefit(models.Model):
     description = models.CharField(max_length=80, null=False, blank=False)
     tier = models.ForeignKey(Tier, on_delete=models.CASCADE, null=False, blank=False, related_name="benefits")
+    editable = models.BooleanField(default=True)
 
     def __str__(self):
         return self.description

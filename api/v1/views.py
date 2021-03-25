@@ -52,6 +52,10 @@ class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
     serializer_class = serializers.UserSerializer
 
+    def get_serializer_context(self):
+        return {
+            'request': self.request,
+        }
 
 class UserMeViewSet(mixins.ListModelMixin,
                     viewsets.GenericViewSet):
@@ -59,7 +63,7 @@ class UserMeViewSet(mixins.ListModelMixin,
     permission_classes = [permissions.IsAuthenticated, ]
 
     def get_serializer_class(self):
-        #UserMeNoCoachSerializer
+        # UserMeNoCoachSerializer
         user = self.get_queryset()
         print(user.first().is_coach)
         if user.first().is_coach:
@@ -69,6 +73,10 @@ class UserMeViewSet(mixins.ListModelMixin,
     def get_queryset(self):
         return User.objects.filter(pk=self.request.user.pk)
 
+    def get_serializer_context(self):
+        return {
+            'request': self.request,
+        }
 
 class SubscriberMeViewSet(APIView):
     permission_classes = [permissions.IsAuthenticated, ]
@@ -84,8 +92,10 @@ class SubscriberMeViewSet(APIView):
 
 class CoachFilterSet(filters.FilterSet):
     name = filters.CharFilter(field_name="name", lookup_expr="icontains")
-    expertise = filters.CharFilter(field_name="expertise_field__name", lookup_expr="iexact")
-    expertise_field = filters.ModelChoiceFilter(queryset=ExpertiseField.objects.all())
+    expertise = filters.CharFilter(
+        field_name="expertise_field__name", lookup_expr="iexact")
+    expertise_field = filters.ModelChoiceFilter(
+        queryset=ExpertiseField.objects.all())
 
     class Meta:
         model = Coach
@@ -103,6 +113,7 @@ class CoachViewSet(viewsets.ModelViewSet):
                                     'partial_update': [permissions.IsAuthenticated],
                                     'list': [permissions.AllowAny],
                                     'retreive': [permissions.AllowAny]}
+
     def get_queryset(self):
         queryset = Coach.objects.all()
         username = self.request.query_params.get('username', None)
@@ -110,14 +121,19 @@ class CoachViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         try:
-            # return permission_classes depending on `action` 
+            # return permission_classes depending on `action`
             return [permission() for permission in self.permission_classes_by_action[self.action]]
-        except KeyError: 
+        except KeyError:
             # action is not set return default permission_classes
             return [permission() for permission in self.permission_classes]
 
+    def get_serializer_context(self):
+        return {
+            'request': self.request,
+        }
 
-class CoachApplicationViewSet(generics.CreateAPIView, 
+
+class CoachApplicationViewSet(generics.CreateAPIView,
                               viewsets.GenericViewSet):
     permission_classes = [permissions.IsAuthenticated, ]
     queryset = CoachApplication.objects.all()
@@ -128,6 +144,7 @@ class CoachApplicationViewSet(generics.CreateAPIView,
             'request': self.request,
         }
 
+
 class MyCoachesViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated, ]
     serializer_class = serializers.CoachSerializer
@@ -135,9 +152,9 @@ class MyCoachesViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         if self.request.user.is_coach:
             return Coach.objects.filter(tiers__subscriptions__subscriber=self.request.user.subscriber).exclude(user=self.request.user)
-            #return self.request.user.coaches.exclude(user=self.request.user)
+            # return self.request.user.coaches.exclude(user=self.request.user)
         return Coach.objects.filter(tiers__subscriptions__subscriber=self.request.user.subscriber)
-        #return self.request.user.coaches.all()
+        # return self.request.user.coaches.all()
 
     def get_serializer_context(self):
         return {
@@ -190,7 +207,17 @@ class NewPostsViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         post_query = Post.objects.none()
         for coach in Coach.objects.filter(tiers__subscriptions__subscriber=self.request.user.subscriber).exclude(user=self.request.user):
+            subscription = Subscription.objects.filter(subscriber=self.request.user.subscriber, tier__coach=coach).first()
+            # by default get all posts available (except the ones that are chained to others, in that case just get the initial), 
+            # later we exclude posts based on the user subscription
             post_query |= coach.posts.exclude(parent_post__isnull=False)
+                
+            # if use has subscriberd to tier 1 exclude tier 2 posts
+            if subscription.tier.tier==Tier.TIER1:
+                post_query = post_query.exclude(coach=coach, tier__tier=Tier.TIER2)
+            elif subscription.tier.tier==Tier.FREE:
+                post_query = post_query.exclude(coach=coach, tier__tier__in=[Tier.TIER2, Tier.TIER1])
+
         return post_query
 
     def get_serializer_context(self):
@@ -206,14 +233,18 @@ class ChainPostsViewSet(generics.CreateAPIView, viewsets.GenericViewSet):
 
 class ProjectsViewSet(viewsets.ModelViewSet):
     queryset = Project.objects.all()
-    permission_classes = [permissions.IsAuthenticated,]
+    permission_classes = [permissions.IsAuthenticated, ]
     lookup_field = 'surrogate'
 
     def get_serializer_class(self):
-        if self.action=='create' or self.action=='update' or self.action=='partial_update':
+        if self.action == 'create' or self.action == 'update' or self.action == 'partial_update':
             return serializers.CreateOrUpdateProjectSerializer
         return serializers.ProjectSerializer
 
+    def get_serializer_context(self):
+        return {
+            'request': self.request,
+        }
     # def get_permissions(self):
     #     """
     #     Instantiates and returns the list of permissions that this view requires.
@@ -244,6 +275,11 @@ class MyCreatedProjectsViewSet(viewsets.ModelViewSet):
     queryset = Project.objects.all()
     serializer_class = serializers.ProjectSerializer
 
+    def get_serializer_context(self):
+        return {
+            'request': self.request,
+        }
+
     def get_queryset(self):
         if self.request.user.coach:
             return self.request.user.coach.created_projects.all()
@@ -265,6 +301,21 @@ class TeamsViewSet(viewsets.ModelViewSet):
             'project': project
         }
 
+
+class ProjectPostsViewSet(viewsets.ModelViewSet):
+    serializer_class = serializers.PostSerializer
+
+    def get_queryset(self):
+        project_id = self.kwargs['project_id']
+        project = Project.objects.filter(surrogate=project_id).first()
+        return project.posts.all()
+
+    def get_serializer_context(self):
+        return {
+            'request': self.request,
+        }
+
+
 class ExpertiseViewSet(viewsets.ModelViewSet):
     serializer_class = serializers.ExpertiseSerializer
     queryset = ExpertiseField.objects.all()
@@ -274,7 +325,7 @@ class MyTiersViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated, ]
 
     def get_serializer_class(self):
-        if self.action == 'update' or self.action=='partial_update':
+        if self.action == 'update' or self.action == 'partial_update':
             return serializers.UpdateTierSerializer
         else:
             return serializers.TierSerializer
@@ -337,7 +388,7 @@ class ReactsViewSet(viewsets.ModelViewSet):
 class MilestoneCompletionReportViewSet(viewsets.ModelViewSet):
     serializer_class = serializers.MilestoneCompletionReportSerializer
     queryset = MilestoneCompletionReport.objects.all()
-    permission_classes = [permissions.IsAuthenticated,]
+    permission_classes = [permissions.IsAuthenticated, ]
 
     def get_serializer_class(self):
         if self.action == 'create':
@@ -346,7 +397,8 @@ class MilestoneCompletionReportViewSet(viewsets.ModelViewSet):
         return serializers.MilestoneCompletionReportSerializer
 
     def get_queryset(self):
-        milestone = Milestone.objects.filter(id=self.kwargs['milestone_id']).first()
+        milestone = Milestone.objects.filter(
+            id=self.kwargs['milestone_id']).first()
         if milestone:
             return milestone.reports.all()
         return Milestone.objects.none()
@@ -386,7 +438,7 @@ class CreateMessageViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin):
 class NotificationsViewSet(viewsets.ModelViewSet):
     queryset = Notification.objects.all()
     serializer_class = serializers.NotificationSerializer
-    permission_classes = [permissions.IsAuthenticated,]
+    permission_classes = [permissions.IsAuthenticated, ]
 
     def get_serializer_context(self):
         return {
@@ -418,7 +470,8 @@ def subscriber_me(request):
         serializer = serializers.SubscriberSerializer(subscriber)
         return Response(serializers.SubscriberSerializer)
     elif request.method == 'PATCH':
-        serializer = serializers.SubscriberUpdateSerializer(subscriber, data=request.data, partial=True)
+        serializer = serializers.SubscriberUpdateSerializer(
+            subscriber, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_200_OK)
@@ -435,8 +488,18 @@ def join_project(request, id):
     if project.exists():
         project = project.first()
 
+        # Do some tier validation here
+        subscription = Subscription.objects.filter(subscriber=user.subscriber, tier__coach=project__coach)
+        if subscription.tier.tier == Tier.FREE:
+            return Response({'error': 'Free tier subscribers cannot join projects'})
+        elif subscription.tier.tier == Tier.TIER1:
+            # check if user has already subscribed to one of the coach's project
+            # Tier 1 subscribers have access to only 1 of the project so in this case we return error
+            if Team.objects.filter(project__coach=project__coach, members__in=[user.subscriber]).exists():
+                return Response({'error': 'Tier 1 subscribers have access to only one project'})
+
         # This algorithm is not optimal and should be fixed in the future
-        # Currently there is no equal distribution of members across teams 
+        # Currently there is no equal distribution of members across teams
         # meaning that all teams will first become full sequentially and then new teams will be created
         # Instead an average should be calculated based on the amount of members that have joined the project
         # average = (total_members_joined / project.team_size). The algorithm should aim to populate teams
@@ -444,7 +507,7 @@ def join_project(request, id):
         # team size gap between teams
 
         team_found = False
- 
+
         # First try to find a team with empty spots and add the user there
         for team in project.teams.all():
             if team.members.count() < project.team_size:
@@ -452,18 +515,20 @@ def join_project(request, id):
                 team.members.add(user.subscriber)
 
                 # add the user to all available chat rooms for this project
-                chat_rooms = ChatRoom.objects.filter(project=project, team=team)
+                chat_rooms = ChatRoom.objects.filter(
+                    project=project, team=team)
                 for chat_room in chat_rooms:
                     chat_room.members.add(user.subscriber)
 
                 return Response({'team': serializers.TeamSerializer(
-                                                    team,
-                                                    context={'request': request, 
-                                                             'project': project}).data})
+                    team,
+                    context={'request': request,
+                             'project': project}).data})
 
         # If no empty teams are found / or created create a new team only with this member
         if not team_found:
-            new_team = Team.objects.create(project=project, name=user.subscriber.name)
+            new_team = Team.objects.create(
+                project=project, name=user.subscriber.name)
             new_team.members.add(user.subscriber)
 
             # create a new chat room for the team
@@ -472,13 +537,15 @@ def join_project(request, id):
             chat_room.members.add(user.subscriber)
 
             # also create another chat room for the team + the coach
-            chat_room_with_coach = ChatRoom.objects.create(name=user.subscriber.name, type=ChatRoom.TEAM_WITH_COACH, project=project)
-            chat_room_with_coach.members.add(user.subscriber, project.coach.user.subscriber)
+            chat_room_with_coach = ChatRoom.objects.create(
+                name=user.subscriber.name, type=ChatRoom.TEAM_WITH_COACH, project=project)
+            chat_room_with_coach.members.add(
+                user.subscriber, project.coach.user.subscriber)
 
             return Response({'team': serializers.TeamSerializer(
-                                                new_team,
-                                                context={'request': request,
-                                                         'project': project}).data})
+                new_team,
+                context={'request': request,
+                         'project': project}).data})
 
 
 @api_view(http_method_names=['POST', 'DELETE'])
@@ -492,10 +559,12 @@ def subscribe(request, id):
         # First check if the user has already subscribed to this coach with another tier
         # if that is the case delete the existing one and initiate another subscription
         if Subscription.objects.filter(subscriber=user.subscriber, tier__coach=tier.coach).exists():
-            sub_instance = Subscription.objects.filter(subscriber=user.subscriber, tier__coach=tier.coach).first()
+            sub_instance = Subscription.objects.filter(
+                subscriber=user.subscriber, tier__coach=tier.coach).first()
 
-            subscription = stripe.Subscription.retrieve(sub_instance.subscription_id)
-            
+            subscription = stripe.Subscription.retrieve(
+                sub_instance.subscription_id)
+
             subscription = stripe.Subscription.modify(
                 subscription.id,
                 cancel_at_period_end=False,
@@ -505,7 +574,7 @@ def subscribe(request, id):
                     'price': tier.price_id,
                 }]
             )
-        
+
             sub_instance.tier = tier
             sub_instance.json_data = json.dumps(subscription)
             sub_instance.subscription_id = subscription.id
@@ -518,7 +587,6 @@ def subscribe(request, id):
         if Subscription.objects.filter(subscriber=user.subscriber, tier=tier).exists():
             return Response({'tier': tier.surrogate})
 
-
         # If neither of the above scenarios happen create a new subscription on both our end
         # and stripe
         subscription = stripe.Subscription.create(
@@ -529,17 +597,19 @@ def subscribe(request, id):
         )
 
         Subscription.objects.create(subscriber=request.user.subscriber, subscription_id=subscription.id,
-                                    customer_id=request.user.subscriber.customer_id, json_data=json.dumps(subscription),
+                                    customer_id=request.user.subscriber.customer_id, json_data=json.dumps(
+                                        subscription),
                                     tier=tier, price_id=tier.price_id)
         # tier.subscribers.add(user)
     if request.method == 'DELETE':
         subcription = Subscription.objects.filter(subscriber=request.user.subscriber,
-                                   tier=tier).first()
+                                                  tier=tier).first()
         subcription.delete()
 
         # remember to remove user from all his teams with this coach
-        teams = Team.objects.filter(project__coach=tier.coach, members=user.subscriber)
-        
+        teams = Team.objects.filter(
+            project__coach=tier.coach, members=user.subscriber)
+
         for team in teams:
             # remove user from all the relevant chat rooms for this project
             chat_rooms = ChatRoom.objects.filter(team=team)
@@ -561,7 +631,7 @@ def attach_payment_method(request):
     user = request.user
     if request.method == 'POST':
         customer_id = request.user.subscriber.customer_id
-        
+
         # attach the payment method to the customer
         payment_method = stripe.PaymentMethod.attach(
             request.data['id'],
@@ -576,6 +646,7 @@ def attach_payment_method(request):
         return Response({'payment_id': payment_method.id})
     if request.method == 'DELETE':
         return Response({'payment_id': None})
+
 
 @api_view(http_method_names=['PUT', 'DELETE'])
 @permission_classes((permissions.IsAuthenticated,))
@@ -602,18 +673,21 @@ def upload_video(request):
     configuration.password = os.environ['MUX_TOKEN_SECRET']
 
     passthrough_id = str(uuid.uuid1())
-    
+
     # Mark post as processing while video is being processed by mux
     post = Post.objects.get(surrogate=request.data['post'])
     post.status == Post.PROCESSING
     post.save(processing=True)
-    PostVideoAssetMetaData.objects.create(passthrough=passthrough_id, post=post)
+    PostVideoAssetMetaData.objects.create(
+        passthrough=passthrough_id, post=post)
     create_asset_request = mux_python.CreateAssetRequest(playback_policy=[mux_python.PlaybackPolicy.PUBLIC],
                                                          mp4_support="standard", passthrough=passthrough_id)
 
     # API Client Initialization
-    request = mux_python.CreateUploadRequest(new_asset_settings=create_asset_request, test=True)
-    direct_uploads_api = mux_python.DirectUploadsApi(mux_python.ApiClient(configuration))
+    request = mux_python.CreateUploadRequest(
+        new_asset_settings=create_asset_request, test=True)
+    direct_uploads_api = mux_python.DirectUploadsApi(
+        mux_python.ApiClient(configuration))
     response = direct_uploads_api.create_direct_upload(request)
 
     try:
@@ -632,18 +706,22 @@ def upload_milestonecompletion_video(request):
     configuration.password = os.environ['MUX_TOKEN_SECRET']
 
     passthrough_id = str(uuid.uuid1())
-    
+
     # Mark milestone report as processing while video is being processed by mux
-    milestone_completion_report = MilestoneCompletionReport.objects.get(surrogate=request.data['milestone_completion_report'])
+    milestone_completion_report = MilestoneCompletionReport.objects.get(
+        surrogate=request.data['milestone_completion_report'])
     milestone_completion_report.video_status == MilestoneCompletionReport.PROCESSING
     milestone_completion_report.save()
-    MilestoneCompletionVideoAssetMetaData.objects.create(passthrough=passthrough_id, milestone_completion_report=milestone_completion_report)
+    MilestoneCompletionVideoAssetMetaData.objects.create(
+        passthrough=passthrough_id, milestone_completion_report=milestone_completion_report)
     create_asset_request = mux_python.CreateAssetRequest(playback_policy=[mux_python.PlaybackPolicy.PUBLIC],
                                                          mp4_support="standard", passthrough=passthrough_id)
 
     # API Client Initialization
-    request = mux_python.CreateUploadRequest(new_asset_settings=create_asset_request, test=True)
-    direct_uploads_api = mux_python.DirectUploadsApi(mux_python.ApiClient(configuration))
+    request = mux_python.CreateUploadRequest(
+        new_asset_settings=create_asset_request, test=True)
+    direct_uploads_api = mux_python.DirectUploadsApi(
+        mux_python.ApiClient(configuration))
     response = direct_uploads_api.create_direct_upload(request)
 
     try:
@@ -663,20 +741,26 @@ def upload_video_webhook(request):
 
         # in case the video is attached to a post
         if PostVideoAssetMetaData.objects.filter(passthrough=passthrough).exists():
-            video_data = PostVideoAssetMetaData.objects.get(passthrough=passthrough)
-            video = PostVideo.objects.create(asset_id=asset_id, passthrough=video_data.passthrough, post=video_data.post)
+            video_data = PostVideoAssetMetaData.objects.get(
+                passthrough=passthrough)
+            video = PostVideo.objects.create(
+                asset_id=asset_id, passthrough=video_data.passthrough, post=video_data.post)
             for playback_id in playback_ids:
-                PlaybackId.objects.create(playback_id=playback_id['id'], policy=playback_id['policy'], video=video)
+                PlaybackId.objects.create(
+                    playback_id=playback_id['id'], policy=playback_id['policy'], video=video)
             # Video is done processing by mux. Mark it as done.
             video_data.post.status = Post.DONE
             video_data.post.save()
 
         # in case the video is attached to a post
         if MilestoneCompletionVideoAssetMetaData.objects.filter(passthrough=passthrough).exists():
-            video_data = MilestoneCompletionVideoAssetMetaData.objects.get(passthrough=passthrough)
-            video = MilestoneCompletionVideo.objects.create(asset_id=asset_id, passthrough=video_data.passthrough, milestone_completion_report=video_data.milestone_completion_report)
+            video_data = MilestoneCompletionVideoAssetMetaData.objects.get(
+                passthrough=passthrough)
+            video = MilestoneCompletionVideo.objects.create(
+                asset_id=asset_id, passthrough=video_data.passthrough, milestone_completion_report=video_data.milestone_completion_report)
             for playback_id in playback_ids:
-                MilestoneCompletionPlaybackId.objects.create(playback_id=playback_id['id'], policy=playback_id['policy'], video=video)
+                MilestoneCompletionPlaybackId.objects.create(
+                    playback_id=playback_id['id'], policy=playback_id['policy'], video=video)
             # Video is done processing by mux. Mark it as done.
             video_data.milestone_completion_report.status = MilestoneCompletionReport.DONE
             video_data.milestone_completion_report.save()
@@ -702,8 +786,10 @@ def create_stripe_account_link(request):
         refresh_url = "http://localhost:3000/reauth"
 
     else:
-        redirect = 'https://%s%s' % (Site.objects.get_current().domain, '/users/oauth/callback')
-        refresh_url = 'https://%s%s' % (Site.objects.get_current().domain, '/reauth')
+        redirect = 'https://%s%s' % (Site.objects.get_current().domain,
+                                     '/users/oauth/callback')
+        refresh_url = 'https://%s%s' % (
+            Site.objects.get_current().domain, '/reauth')
 
     account_link = stripe.AccountLink.create(
         account=request.user.coach.stripe_id,
@@ -737,7 +823,7 @@ def stripe_webook(request):
 
     try:
         event = stripe.Webhook.construct_event(
-          payload, sig_header, os.environ.get('STRIPE_ENDPOINT_SECRET')
+            payload, sig_header, os.environ.get('STRIPE_ENDPOINT_SECRET')
         )
     except ValueError as e:
         # Invalid payload
@@ -747,7 +833,7 @@ def stripe_webook(request):
         return HttpResponse(status=400)
 
     if event.type == 'payment_method.attached':
-        payment_method = event.data.object # contains a stripe.PaymentMethod
+        payment_method = event.data.object  # contains a stripe.PaymentMethod
     elif event.type == 'account.updated':
         account = event.data.object
         charges_enabled = account.get('charges_enabled', '')
