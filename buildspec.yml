@@ -4,7 +4,7 @@ phases:
     commands: 
       - apt-get upgrade
       - apt-get install zip
-      - apt-get install unixodbc-dev unixodbc
+      # - apt-get install unixodbc-dev unixodbc
   pre_build: 
     commands: 
     - echo Logging in to Amazon ECR.... 
