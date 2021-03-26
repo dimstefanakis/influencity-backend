@@ -1,10 +1,5 @@
 version: 0.2
 phases: 
-  install:
-    commands: 
-      - apt-get upgrade
-      - apt-get install zip
-      # - apt-get install unixodbc-dev unixodbc
   pre_build: 
     commands: 
     - echo Logging in to Amazon ECR....
@@ -12,7 +7,7 @@ phases:
     - aws --version
     # update the following line with your own region
 
-    - $(aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws/t2o0q9j8)
+    - aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws/t2o0q9j8
     # - $(aws ecr get-login --no-include-email --region us-east-1)
     - COMMIT_HASH=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
     - IMAGE_TAG=${COMMIT_HASH:=latest}
