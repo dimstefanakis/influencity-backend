@@ -21,14 +21,16 @@ phases:
     - docker build -t troosh .
     # update the following line with the URI of your own ECR repository (view the Push Commands in the console)
     # - docker tag $REPOSITORY_URI:latest $REPOSITORY_URI:$IMAGE_TAG 
-    - docker tag troosh:latest $REPOSITORY_URI:latest
+    # - docker tag troosh:latest $REPOSITORY_URI:latest
+    - docker tag troosh:latest public.ecr.aws/t2o0q9j8/troosh:latest
   post_build: 
     commands: 
     - echo Build completed on `date` 
     - echo pushing to repo
     # update the following line with the URI of your own ECR repository
-    - docker push $REPOSITORY_URI:latest
-    - docker push $REPOSITORY_URI:$IMAGE_TAG
+    # - docker push $REPOSITORY_URI:latest
+    # - docker push $REPOSITORY_URI:$IMAGE_TAG
+    - docker push public.ecr.aws/t2o0q9j8/troosh:latest
     - echo Writing image definitions file... 
     #- printf '[{"ImageURI":"%s"}]' $REPOSITORY_URI:$IMAGE_TAG > imageDetail.json
     - printf '{"ImageURI":"%s"}' $REPOSITORY_URI:$IMAGE_TAG > imageDetail.json
