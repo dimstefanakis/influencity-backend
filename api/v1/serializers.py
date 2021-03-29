@@ -268,6 +268,7 @@ class CreateMilestoneCompletionReportSerializer(serializers.ModelSerializer):
 
 class MilestoneCompletionReportSerializer(serializers.ModelSerializer):
     members = SubscriberSerializer(many=True, required=False)
+    images = MilestoneCompletionImageSerializer(many=True, required=False)
 
     class Meta:
         model = MilestoneCompletionReport
