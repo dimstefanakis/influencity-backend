@@ -1,5 +1,5 @@
 from django.db import models
-from django.db.models.signals import m2m_changed
+from django.db.models.signals import m2m_changed, post_save
 from django.dispatch import receiver
 from subscribers.models import Subscriber
 from common.models import CommonImage
@@ -34,6 +34,19 @@ class Project(models.Model):
     def __str__(self):
         return self.name
 
+
+class TeamImage(CommonImage):
+    pass
+
+
+class Team(models.Model):
+    name = models.CharField(max_length=60, null=True, blank=True)
+    avatar = models.ForeignKey(TeamImage, on_delete=models.CASCADE, null=True, blank=True, related_name="team")
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="teams", null=True)
+    members = models.ManyToManyField(Subscriber, related_name="teams")
+
+    def __str__(self):
+        return self.name
 
 class Prerequisite(models.Model):
     surrogate = models.UUIDField(default=uuid.uuid4, db_index=True)
@@ -82,6 +95,7 @@ class MilestoneCompletionReport(models.Model):
     milestone = models.ForeignKey(Milestone, on_delete=models.CASCADE, related_name="reports", null=True, blank=True)
     members = models.ManyToManyField(Subscriber, related_name="milestone_reports")
     message = models.TextField(null=True, blank=True)
+    team = models.ForeignKey(Team, on_delete=models.CASCADE, null=True, blank=True)
 
 
 class MilestoneCompletionImage(CommonImage):
@@ -106,20 +120,6 @@ class MilestoneCompletionPlaybackId(models.Model):
     video = models.ForeignKey(MilestoneCompletionVideo, on_delete=models.CASCADE, related_name="playback_ids")
 
 
-class TeamImage(CommonImage):
-    pass
-
-
-class Team(models.Model):
-    name = models.CharField(max_length=60, null=True, blank=True)
-    avatar = models.ForeignKey(TeamImage, on_delete=models.CASCADE, null=True, blank=True, related_name="team")
-    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="teams", null=True)
-    members = models.ManyToManyField(Subscriber, related_name="teams")
-
-    def __str__(self):
-        return self.name
-
-
 @receiver(m2m_changed, sender=Team.members.through)
 def team_members_changed(sender, instance, **kwargs):
     action = kwargs.pop('action', None)
@@ -128,3 +128,9 @@ def team_members_changed(sender, instance, **kwargs):
         # if teams is left with no members delete it
         if instance.members.count() == 0:
             instance.delete()
+
+
+@receiver(post_save, sender=MilestoneCompletionReport)
+def milestone_completion_report_saved(sender, instance, created, **kwargs):
+    if instance.status == MilestoneCompletionReport.ACCEPTED:
+        instance.milestone.completed_teams.add()        

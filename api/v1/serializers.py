@@ -1,10 +1,11 @@
+from django.db.models import Q
 from django.db.models import Count
 from rest_framework import serializers
 from asgiref.sync import async_to_sync
 from accounts.models import User
 from instructor.models import Coach, CoachApplication
 from posts.models import Post, PostImage, PostVideo, PlaybackId
-from projects.models import Project, Prerequisite, Milestone, Team, MilestoneCompletionReport, MilestoneCompletionImage
+from projects.models import Project, Prerequisite, Milestone, Team, MilestoneCompletionReport, MilestoneCompletionImage, MilestoneCompletionPlaybackId, MilestoneCompletionVideo
 from comments.models import CommentImage, Comment
 from subscribers.models import Subscriber, SubscriberAvatar, Subscription
 from expertisefields.models import ExpertiseField, ExpertiseFieldAvatar
@@ -217,6 +218,20 @@ class MilestoneCompletionImageSerializer(serializers.ModelSerializer):
         fields = ['width', 'height', 'image']
 
 
+class MilestoneCompletionPlaybackSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MilestoneCompletionPlaybackId
+        fields = ['playback_id', 'policy']
+
+
+class MilestoneCompletionVideoSerializer(serializers.ModelSerializer):
+    playback_ids = MilestoneCompletionPlaybackSerializer(many=True)
+
+    class Meta:
+        model = MilestoneCompletionVideo
+        fields = ['asset_id', 'playback_ids']
+
+
 class MilestoneSerializer(serializers.ModelSerializer):
     id = serializers.SerializerMethodField()
 
@@ -248,8 +263,9 @@ class CreateMilestoneCompletionReportSerializer(serializers.ModelSerializer):
         except KeyError:
             members = []
 
+        milestone = Milestone.objects.filter(id=milestone_id).first()
         milestone_report = MilestoneCompletionReport.objects.create(
-            milestone_id=milestone_id, **validated_data)
+            milestone=milestone, **validated_data)
 
         for image in images:
             MilestoneCompletionImage.objects.create(
@@ -257,22 +273,30 @@ class CreateMilestoneCompletionReportSerializer(serializers.ModelSerializer):
 
         for member in members:
             _member = Subscriber.objects.filter(surrogate=member)
+            # find team from members
+            # this is not really optimal but whatever
+            team = _member.first().teams.filter(project=milestone.project).first()
+            milestone_report.team = team
             milestone_report.members.set(_member)
+
+        milestone_report.save()
         return milestone_report
 
     class Meta:
         model = MilestoneCompletionReport
-        fields = ['surrogate', 'members', 'message', 'milestone', 'images']
-        read_only_fields = ['milestone', 'surrogate']
+        fields = ['surrogate', 'members', 'team', 'message', 'milestone', 'images']
+        read_only_fields = ['milestone', 'surrogate', 'team']
 
 
 class MilestoneCompletionReportSerializer(serializers.ModelSerializer):
     members = SubscriberSerializer(many=True, required=False)
     images = MilestoneCompletionImageSerializer(many=True, required=False)
+    videos = MilestoneCompletionVideoSerializer(many=True, required=False)
 
     class Meta:
         model = MilestoneCompletionReport
-        fields = ['members', 'message', 'milestone', 'images', 'surrogate']
+        fields = ['members', 'message', 'milestone',
+                  'images', 'videos', 'surrogate']
         read_only_fields = fields
 
 
@@ -282,6 +306,7 @@ class ProjectSerializer(serializers.ModelSerializer):
     difficulty = serializers.SerializerMethodField()
     linked_posts_count = serializers.SerializerMethodField()
     coach_data = serializers.SerializerMethodField()
+    team_data = serializers.SerializerMethodField()
     id = serializers.SerializerMethodField()
 
     def get_id(self, project):
@@ -289,7 +314,7 @@ class ProjectSerializer(serializers.ModelSerializer):
 
     def get_difficulty(self, project):
         return project.get_difficulty_display()
-    
+
     def get_linked_posts_count(self, project):
         return project.posts.count()
 
@@ -301,20 +326,41 @@ class ProjectSerializer(serializers.ModelSerializer):
             user = self.context['request'].user
             if user.is_authenticated:
                 if user.subscriber.subscriptions.filter(tier__coach=project.coach).exists():
-                    subscription = user.subscriber.subscriptions.filter(tier__coach=project.coach).first()
+                    subscription = user.subscriber.subscriptions.filter(
+                        tier__coach=project.coach).first()
                     my_tier = subscription.tier
-                    number_of_projects_joined = Team.objects.filter(project__coach=project.coach, members__in=[user.subscriber]).count()
+                    number_of_projects_joined = Team.objects.filter(
+                        project__coach=project.coach, members__in=[user.subscriber]).count()
         except KeyError:
             number_of_projects_joined = None
-        
+
         return {'number_of_projects_joined': number_of_projects_joined, "id": project.coach.surrogate, "my_tier": TierSerializer(my_tier).data}
 
+    def get_team_data(self, project):
+        try:
+            user = self.context['request'].user
+            if user.is_authenticated:
+                # check if this user owns this project
+                if user.is_coach and project.coach == user.coach:
+                    team_count = Team.objects.filter(project=project).count()
+
+                    # no need to return only the ACCEPTED milestones
+                    number_of_tasks_completed = MilestoneCompletionReport.objects.filter(
+                        milestone__project=project).filter(Q(status=MilestoneCompletionReport.PENDING) | Q(status=MilestoneCompletionReport.ACCEPTED)).count()
+
+                    number_of_tasks_reviewed = MilestoneCompletionReport.objects.filter(
+                        milestone__project=project, status=MilestoneCompletionReport.ACCEPTED).count()
+                    number_of_tasks_not_reviewed = MilestoneCompletionReport.objects.filter(
+                        milestone__project=project, status=MilestoneCompletionReport.PENDING).count()
+                    return {'team_count': team_count, 'number_of_tasks_completed': number_of_tasks_completed, 'number_of_tasks_reviewed': number_of_tasks_reviewed, 'number_of_tasks_not_reviewed': number_of_tasks_not_reviewed}
+        except KeyError:
+            return None
 
     class Meta:
         model = Project
         fields = ['name', 'description', 'difficulty', 'linked_posts_count',
-                  'team_size', 'prerequisites', 'milestones', 'coach_data', 'id']
-        read_only_fields = ['linked_posts', 'coach_data']
+                  'team_size', 'prerequisites', 'milestones', 'coach_data', 'team_data', 'id']
+        read_only_fields = ['linked_posts', 'coach_data', 'team_data']
 
 
 class CreateOrUpdateProjectSerializer(serializers.ModelSerializer):
@@ -840,12 +886,14 @@ class MyProjectsSerializer(serializers.ModelSerializer):
             user = self.context['request'].user
             if user.is_authenticated:
                 if user.subscriber.subscriptions.filter(tier__coach=project.coach).exists():
-                    subscription = user.subscriber.subscriptions.filter(tier__coach=project.coach).first()
+                    subscription = user.subscriber.subscriptions.filter(
+                        tier__coach=project.coach).first()
                     my_tier = subscription.tier
-                    number_of_projects_joined = Team.objects.filter(project__coach=project.coach, members__in=[user.subscriber]).count()
+                    number_of_projects_joined = Team.objects.filter(
+                        project__coach=project.coach, members__in=[user.subscriber]).count()
         except KeyError:
             number_of_projects_joined = None
-        
+
         return {'number_of_projects_joined': number_of_projects_joined, "id": project.coach.surrogate, "my_tier": TierSerializer(my_tier).data}
 
     def get_difficulty(self, obj):
