@@ -52,4 +52,6 @@ urlpatterns = [
     path('v1/get_stripe_balance/', views.get_stripe_balance, name="get_stripe_balance"),
     path('v1/get_stripe_login_link/', views.get_stripe_login, name="get_stripe_login_link"),
     path('v1/posts/<uuid:id>/change_react/', views.change_or_delete_react, name="change_or_delete_react"),
+    path('v1/comment/<uuid:id>/change_react/', views.change_or_delete_comment_react, name="change_or_delete_comment_react"),
 ]
+

@@ -359,11 +359,16 @@ class CommentsViewSet(viewsets.ModelViewSet):
         # get only top level comments
         return Post.objects.get(surrogate=post).comments.filter(level=0)
 
+    def get_serializer_context(self):
+        return {
+            'request': self.request,
+        }
 
 class CreateCommentViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin):
     serializer_class = serializers.CreateCommentSerializer
     pagination_class = CommentPagination
     queryset = Comment.objects.all()
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly,]
 
     def get_serializer_context(self):
         return {
@@ -661,6 +666,22 @@ def change_or_delete_react(request, id):
         if react:
             post.reacts.remove(react)
     react_count = post.reacts.count()
+    return Response({'react_count': react_count})
+
+
+@api_view(http_method_names=['PUT', 'DELETE'])
+@permission_classes((permissions.IsAuthenticated,))
+def change_or_delete_comment_react(request, id):
+    user = request.user
+    comment = Comment.objects.get(surrogate=id)
+    react = comment.reacts.filter(user=user).first()
+    if request.method == 'PUT':
+        if not react:
+            react = comment.reacts.create(user=user)
+    if request.method == 'DELETE':
+        if react:
+            comment.reacts.remove(react)
+    react_count = comment.reacts.count()
     return Response({'react_count': react_count})
 
 

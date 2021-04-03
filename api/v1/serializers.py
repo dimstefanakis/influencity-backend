@@ -781,6 +781,8 @@ class CommentSerializer(serializers.ModelSerializer):
     images = CommentImageSerializer(many=True)
     id = serializers.SerializerMethodField()
     reply_count = serializers.SerializerMethodField()
+    reacted = serializers.SerializerMethodField()
+    reacts = serializers.SerializerMethodField()
 
     def get_id(self, comment):
         return comment.surrogate
@@ -788,10 +790,22 @@ class CommentSerializer(serializers.ModelSerializer):
     def get_reply_count(self, comment):
         return Comment.objects.filter(parent=comment.id).count()
 
+    def get_reacted(self, comment):
+        try:
+            user = self.context['request'].user
+            if user.reacts.filter(object_id=comment.id, user=user).exists():
+                return True
+            return False
+        except KeyError:
+            return None
+
+    def get_reacts(self, comment):
+        return comment.reacts.count()
+
     class Meta:
         model = Comment
         fields = ['id', 'text', 'images', 'user',
-                  'level', 'parent', 'reply_count']
+                  'level', 'parent', 'reply_count', 'reacted', 'reacts']
 
 
 class CreateCommentSerializer(serializers.ModelSerializer):
@@ -799,6 +813,7 @@ class CreateCommentSerializer(serializers.ModelSerializer):
     images = CommentImageSerializer(many=True, required=False)
     id = serializers.SerializerMethodField(required=False)
     parent = serializers.UUIDField(required=False)
+    post = serializers.UUIDField(required=True)
 
     def get_id(self, comment):
         return comment.surrogate
@@ -808,6 +823,7 @@ class CreateCommentSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         user = self.context['request'].user
+        post = Post.objects.filter(surrogate=validated_data.pop('post')).first()
 
         try:
             images = validated_data.pop('images')
@@ -825,7 +841,7 @@ class CreateCommentSerializer(serializers.ModelSerializer):
         reply_to = parent.user if parent else None
 
         comment = Comment.objects.create(
-            user=user.subscriber, parent=parent, reply_to=reply_to, **validated_data)
+            user=user.subscriber, parent=parent, post=post, reply_to=reply_to, **validated_data)
         comment.images.set(images)
 
         return comment

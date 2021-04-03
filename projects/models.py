@@ -1,6 +1,10 @@
 from django.db import models
 from django.db.models.signals import m2m_changed, post_save
 from django.dispatch import receiver
+from notifications.signals import notify
+from notifications.models import Notification
+from asgiref.sync import async_to_sync
+import channels.layers
 from subscribers.models import Subscriber
 from common.models import CommonImage
 from instructor.models import Coach
@@ -134,3 +138,44 @@ def team_members_changed(sender, instance, **kwargs):
 def milestone_completion_report_saved(sender, instance, created, **kwargs):
     if instance.status == MilestoneCompletionReport.ACCEPTED:
         instance.milestone.completed_teams.add()        
+
+
+@receiver(post_save, sender=MilestoneCompletionReport, dispatch_uid="send_notification")
+def milestone_completion_report_notification(sender, instance, created, **kwargs):
+    channel_layer = channels.layers.get_channel_layer()
+    if created:
+        notification_data = notify.send(instance.members.first().user, recipient=instance.milestone.project.coach.user, verb='completed a milestone', action_object=instance)
+
+        notification = notification_data[0][1][0]
+        async_to_sync(channel_layer.group_send)(
+            f"{str(instance.milestone.project.coach.user.surrogate)}.notifications.group",
+            {
+                'type': 'send.notification',
+                'id': notification.id
+            }
+        )
+    else:
+        if instance.status == MilestoneCompletionReport.ACCEPTED:
+            for sub in instance.members.all():
+                notification_data = notify.send(instance.milestone.project.coach.user, recipient=sub.user, verb='marked your milestone as complete!', action_object=instance)
+
+                notification = notification_data[0][1][0]
+                async_to_sync(channel_layer.group_send)(
+                    f"{str(sub.user.surrogate)}.notifications.group",
+                    {
+                        'type': 'send.notification',
+                        'id': notification.id
+                    }
+                )
+        else:
+            for sub in instance.members.all():
+                notification_data = notify.send(instance.milestone.project.coach.user, recipient=sub.user, verb='marked your milestone as rejected', action_object=instance)
+
+                notification = notification_data[0][1][0]
+                async_to_sync(channel_layer.group_send)(
+                    f"{str(sub.user.surrogate)}.notifications.group",
+                    {
+                        'type': 'send.notification',
+                        'id': notification.id
+                    }
+                )
