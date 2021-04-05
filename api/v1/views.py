@@ -390,7 +390,9 @@ class ReactsViewSet(viewsets.ModelViewSet):
     queryset = React.objects.all()
 
 
-class MilestoneCompletionReportViewSet(viewsets.ModelViewSet):
+class MilestoneCompletionReportViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin, 
+                                        mixins.RetrieveModelMixin, mixins.ListModelMixin,
+                                        mixins.UpdateModelMixin):
     serializer_class = serializers.MilestoneCompletionReportSerializer
     queryset = MilestoneCompletionReport.objects.all()
     permission_classes = [permissions.IsAuthenticated, ]
@@ -399,6 +401,15 @@ class MilestoneCompletionReportViewSet(viewsets.ModelViewSet):
         if self.action == 'create':
             print(self.request.data)
             return serializers.CreateMilestoneCompletionReportSerializer
+        # if self.action == 'partial_update' or self.action == 'update':
+        #     milestone = Milestone.objects.get(id=self.kwargs['milestone_id'])
+        #     user = self.request.user
+        #     if user.coach and milestone.project.coach == user.coach:
+        #         return serializers.CoachUpdateMilestoneCompletionReportSerializer
+        #     else:
+        #         # TODO
+        #         # create another SubscriberUpdateMilestoneSerializer for subscribers to edit their report
+        #         pass
         return serializers.MilestoneCompletionReportSerializer
 
     def get_queryset(self):
@@ -684,6 +695,27 @@ def change_or_delete_comment_react(request, id):
     react_count = comment.reacts.count()
     return Response({'react_count': react_count})
 
+
+@api_view(http_method_names=['PATCH'])
+@permission_classes((permissions.IsAuthenticated,))
+def update_milestone_report_from_task_id(request, milestone_report_id):
+    user = request.user
+    milestone_report = MilestoneCompletionReport.objects.get(surrogate=milestone_report_id)
+
+    if user.coach and milestone_report.milestone.project.coach == user.coach:
+        milestone_completion_report = MilestoneCompletionReport.objects.get()
+        serializer = serializers.CoachUpdateMilestoneCompletionReportSerializer(
+            milestone_report, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    else:
+        # TODO
+        # create another SubscriberUpdateMilestoneSerializer for subscribers to edit their report
+        pass
+
+    return Response({'error': 'An unexpected error has occured'})
 
 @api_view(http_method_names=['POST'])
 @permission_classes((permissions.AllowAny,))

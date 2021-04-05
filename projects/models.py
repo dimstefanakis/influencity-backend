@@ -99,6 +99,7 @@ class MilestoneCompletionReport(models.Model):
     milestone = models.ForeignKey(Milestone, on_delete=models.CASCADE, related_name="reports", null=True, blank=True)
     members = models.ManyToManyField(Subscriber, related_name="milestone_reports")
     message = models.TextField(null=True, blank=True)
+    coach_feedback = models.TextField(null=True, blank=True)
     team = models.ForeignKey(Team, on_delete=models.CASCADE, null=True, blank=True)
 
 
@@ -140,10 +141,15 @@ def milestone_completion_report_saved(sender, instance, created, **kwargs):
         instance.milestone.completed_teams.add()        
 
 
-@receiver(post_save, sender=MilestoneCompletionReport, dispatch_uid="send_notification")
-def milestone_completion_report_notification(sender, instance, created, **kwargs):
-    channel_layer = channels.layers.get_channel_layer()
-    if created:
+# this notification sends notification to the coach after the team completes a milestone
+# we first need to wait for the members to be populated and then send the notification thats why
+# we handle the milestone creation report in two signals
+@receiver(m2m_changed, sender=MilestoneCompletionReport.members.through)
+def milestone_completion_report_notification_to_coach(sender, instance, **kwargs):
+    action = kwargs.pop('action', None)
+    pk_set = kwargs.pop('pk_set', None)    
+    if action == "post_add":
+        channel_layer = channels.layers.get_channel_layer()
         notification_data = notify.send(instance.members.first().user, recipient=instance.milestone.project.coach.user, verb='completed a milestone', action_object=instance)
 
         notification = notification_data[0][1][0]
@@ -154,7 +160,12 @@ def milestone_completion_report_notification(sender, instance, created, **kwargs
                 'id': notification.id
             }
         )
-    else:
+
+
+@receiver(post_save, sender=MilestoneCompletionReport, dispatch_uid="send_notification")
+def milestone_completion_report_notification(sender, instance, created, **kwargs):
+    channel_layer = channels.layers.get_channel_layer()
+    if not created:
         if instance.status == MilestoneCompletionReport.ACCEPTED:
             for sub in instance.members.all():
                 notification_data = notify.send(instance.milestone.project.coach.user, recipient=sub.user, verb='marked your milestone as complete!', action_object=instance)

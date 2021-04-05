@@ -53,5 +53,6 @@ urlpatterns = [
     path('v1/get_stripe_login_link/', views.get_stripe_login, name="get_stripe_login_link"),
     path('v1/posts/<uuid:id>/change_react/', views.change_or_delete_react, name="change_or_delete_react"),
     path('v1/comment/<uuid:id>/change_react/', views.change_or_delete_comment_react, name="change_or_delete_comment_react"),
+    path('v1/milestone_report/<uuid:milestone_report_id>/update/', views.update_milestone_report_from_task_id, name="update_milestone_report_from_task_id"),
 ]
 

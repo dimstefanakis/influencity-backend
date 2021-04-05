@@ -284,8 +284,19 @@ class CreateMilestoneCompletionReportSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = MilestoneCompletionReport
-        fields = ['surrogate', 'members', 'team', 'message', 'milestone', 'images']
-        read_only_fields = ['milestone', 'surrogate', 'team']
+        fields = ['surrogate', 'members', 'team', 'message', 'coach_feedback', 'milestone', 'images']
+        read_only_fields = ['milestone', 'surrogate', 'team', 'coach_feedback']
+
+
+class CoachUpdateMilestoneCompletionReportSerializer(serializers.ModelSerializer):
+    members = SubscriberSerializer(many=True, required=False)
+    images = MilestoneCompletionImageSerializer(many=True, required=False)
+    videos = MilestoneCompletionVideoSerializer(many=True, required=False)
+
+    class Meta:
+        model = MilestoneCompletionReport
+        fields = ['surrogate', 'members', 'team', 'message', 'coach_feedback', 'milestone', 'images', 'videos', 'status']
+        read_only_fields = ['milestone', 'surrogate', 'team', 'message', 'members', 'images', 'videos']
 
 
 class MilestoneCompletionReportSerializer(serializers.ModelSerializer):
@@ -1179,8 +1190,17 @@ class GenericNotificationRelatedField(serializers.RelatedField):
         if isinstance(value, Coach):
             serializers = CoachSerializer(value, context=context)
         if isinstance(value, ChatRoom):
-            serializers = ChatRoomSerializer(value)
-        return serializers.data
+            serializers = ChatRoomSerializer(value, context=context)
+        if isinstance(value, MilestoneCompletionReport):
+            serializers = MilestoneCompletionReportSerializer(value, context=context)
+        if isinstance(value, Milestone):
+            serializers = MilestoneSerializer(value, context=context)
+        if isinstance(value, User):
+            serializers = SubscriberSerializer(value.subscriber, context=context)
+        try:
+            return serializers.data
+        except Exception as e:
+            print(e)
 
 
 class NotificationSerializer(serializers.Serializer):
