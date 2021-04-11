@@ -507,6 +507,9 @@ def join_project(request, id):
 
         # Do some tier validation here
         subscription = Subscription.objects.filter(subscriber=user.subscriber, tier__coach=project.coach)
+        if not subscription.exists():
+            return Response({'error': 'You need to be at least Tier 1 subsciber or above to join projects'})
+        subscription = subscription.first()
         if subscription.tier.tier == Tier.FREE:
             return Response({'error': 'Free tier subscribers cannot join projects'})
         elif subscription.tier.tier == Tier.TIER1:
