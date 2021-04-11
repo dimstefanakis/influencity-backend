@@ -506,13 +506,13 @@ def join_project(request, id):
         project = project.first()
 
         # Do some tier validation here
-        subscription = Subscription.objects.filter(subscriber=user.subscriber, tier__coach=project__coach)
+        subscription = Subscription.objects.filter(subscriber=user.subscriber, tier__coach=project.coach)
         if subscription.tier.tier == Tier.FREE:
             return Response({'error': 'Free tier subscribers cannot join projects'})
         elif subscription.tier.tier == Tier.TIER1:
             # check if user has already subscribed to one of the coach's project
             # Tier 1 subscribers have access to only 1 of the project so in this case we return error
-            if Team.objects.filter(project__coach=project__coach, members__in=[user.subscriber]).exists():
+            if Team.objects.filter(project__coach=project.coach, members__in=[user.subscriber]).exists():
                 return Response({'error': 'Tier 1 subscribers have access to only one project'})
 
         # This algorithm is not optimal and should be fixed in the future
