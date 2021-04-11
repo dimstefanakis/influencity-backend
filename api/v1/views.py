@@ -228,6 +228,7 @@ class NewPostsViewSet(viewsets.ModelViewSet):
 
 class ChainPostsViewSet(generics.CreateAPIView, viewsets.GenericViewSet):
     queryset = Post.objects.all()
+    permission_classes = [permissions.IsAuthenticated, ]
     serializer_class = serializers.ChainPostsSerializer
 
 
