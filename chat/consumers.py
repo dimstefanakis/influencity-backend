@@ -41,7 +41,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
         new_message = await self.create_message(text=message, user=subscriber, room=self.room)
         try:
             avatar = self.user_avatar.image.url
-        except KeyError:
+        except Exception:
             avatar = None
 
         # Send message to room group
