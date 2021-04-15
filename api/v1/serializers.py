@@ -889,12 +889,13 @@ class MyProjectsSerializer(serializers.ModelSerializer):
 
         for milestone in project.milestones.all():
             completed = False
-            reports = milestone.reports.all()
-            if team in milestone.completed_teams.all():
-                completed = True
+            reports = milestone.reports.filter(team=team)
+            # if team in milestone.completed_teams.all():
+            #     completed = True
             status = None
             if reports.filter(status=MilestoneCompletionReport.ACCEPTED).exists():
                 status = 'accepted'
+                completed = True
             elif reports.filter(status=MilestoneCompletionReport.REJECTED).exists():
                 status = 'rejected'
             elif reports.filter(status=MilestoneCompletionReport.PENDING).exists():
@@ -958,12 +959,13 @@ class TeamSerializer(serializers.ModelSerializer):
 
         for milestone in project.milestones.all():
             completed = False
-            reports = milestone.reports.all()
-            if team in milestone.completed_teams.all():
-                completed = True
+            reports = milestone.reports.filter(team=team)
+            # if team in milestone.completed_teams.all():
+            #     completed = True
             status = None
             if reports.filter(status=MilestoneCompletionReport.ACCEPTED).exists():
                 status = 'accepted'
+                completed = True
             elif reports.filter(status=MilestoneCompletionReport.REJECTED).exists():
                 status = 'rejected'
             elif reports.filter(status=MilestoneCompletionReport.PENDING).exists():
