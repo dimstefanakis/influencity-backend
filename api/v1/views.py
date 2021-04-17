@@ -218,7 +218,9 @@ class NewPostsViewSet(viewsets.ModelViewSet):
             elif subscription.tier.tier==Tier.FREE:
                 post_query = post_query.exclude(coach=coach, tier__tier__in=[Tier.TIER2, Tier.TIER1])
 
-        return post_query
+        if self.request.user.coach:
+            post_query = post_query | Post.objects.filter(coach=self.request.user.coach)
+        return post_query.distinct()
 
     def get_serializer_context(self):
         return {

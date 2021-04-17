@@ -284,8 +284,8 @@ class CreateMilestoneCompletionReportSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = MilestoneCompletionReport
-        fields = ['surrogate', 'members', 'team', 'message', 'coach_feedback', 'milestone', 'images']
-        read_only_fields = ['milestone', 'surrogate', 'team', 'coach_feedback']
+        fields = ['surrogate', 'members', 'team', 'message', 'milestone', 'images']
+        read_only_fields = ['milestone', 'surrogate', 'team']
 
 
 class CoachUpdateMilestoneCompletionReportSerializer(serializers.ModelSerializer):
@@ -306,7 +306,7 @@ class MilestoneCompletionReportSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = MilestoneCompletionReport
-        fields = ['members', 'message', 'milestone',
+        fields = ['members', 'message', 'milestone', 'coach_feedback', 'status',
                   'images', 'videos', 'surrogate']
         read_only_fields = fields
 
@@ -317,6 +317,7 @@ class ProjectSerializer(serializers.ModelSerializer):
     difficulty = serializers.SerializerMethodField()
     linked_posts_count = serializers.SerializerMethodField()
     coach_data = serializers.SerializerMethodField()
+    coach = serializers.SerializerMethodField()
     team_data = serializers.SerializerMethodField()
     id = serializers.SerializerMethodField()
 
@@ -347,6 +348,12 @@ class ProjectSerializer(serializers.ModelSerializer):
 
         return {'number_of_projects_joined': number_of_projects_joined, "id": project.coach.surrogate, "my_tier": TierSerializer(my_tier).data}
 
+    def get_coach(self, project):
+        avatar = None
+        if project.coach.avatar:
+            avatar = project.coach.avatar.image.url
+        return {'name': project.coach.name, 'avatar': avatar}
+
     def get_team_data(self, project):
         try:
             user = self.context['request'].user
@@ -369,9 +376,9 @@ class ProjectSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Project
-        fields = ['name', 'description', 'difficulty', 'linked_posts_count',
+        fields = ['name', 'description', 'difficulty', 'linked_posts_count', 'coach',
                   'team_size', 'prerequisites', 'milestones', 'coach_data', 'team_data', 'id']
-        read_only_fields = ['linked_posts', 'coach_data', 'team_data']
+        read_only_fields = ['linked_posts', 'coach_data', 'team_data', 'coach']
 
 
 class CreateOrUpdateProjectSerializer(serializers.ModelSerializer):
