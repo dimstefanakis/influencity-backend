@@ -940,16 +940,56 @@ class MyProjectsSerializer(serializers.ModelSerializer):
 class MyTeamsSerializer(serializers.ModelSerializer):
     members = SubscriberSerializer(many=True)
     project = serializers.StringRelatedField()
+    team_tier = serializers.SerializerMethodField()
+
+    # this returns an overall "tier" to the team
+    # for example if a team has a user with Tier 2 then the whole team
+    # is classified as Tier 2
+    def get_team_tier(self, team):
+        tiers = []
+        for member in team.members.all():
+            subscription = member.subscriptions.filter(tier__coach=team.project.coach)
+            if subscription.exists():
+                subscription = subscription.first()
+                tier = subscription.tier
+                tiers.append(tier)
+        # if any user is subscriber to Tier 2 the whole team is Tier 2
+        if any(tier.tier == Tier.TIER2 for tier in tiers):
+            return 2
+        # if any user is subscriber to Tier 1 and no one is in Tier 2 the whole team is Tier 1
+        if any(tier.tier == Tier.TIER1 for tier in tiers):
+            return 1
+        return None
 
     class Meta:
         model = Team
-        fields = ['name', 'avatar', 'project', 'members']
+        fields = ['name', 'avatar', 'project', 'members', 'team_tier']
 
 
 class TeamSerializer(serializers.ModelSerializer):
     members = SubscriberSerializer(many=True)
     project = serializers.StringRelatedField()
     milestones = serializers.SerializerMethodField()
+    team_tier = serializers.SerializerMethodField()
+
+    # this returns an overall "tier" to the team
+    # for example if a team has a user with Tier 2 then the whole team
+    # is classified as Tier 2
+    def get_team_tier(self, team):
+        tiers = []
+        for member in team.members.all():
+            subscription = member.subscriptions.filter(tier__coach=team.project.coach)
+            if subscription.exists():
+                subscription = subscription.first()
+                tier = subscription.tier
+                tiers.append(tier)
+        # if any user is subscriber to Tier 2 the whole team is Tier 2
+        if any(tier.tier == Tier.TIER2 for tier in tiers):
+            return 2
+        # if any user is subscriber to Tier 1 and no one is in Tier 2 the whole team is Tier 1
+        if any(tier.tier == Tier.TIER1 for tier in tiers):
+            return 1
+        return None
 
     def get_milestones(self, team):
         user = self.context['request'].user
@@ -978,7 +1018,7 @@ class TeamSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Team
-        fields = ['name', 'avatar', 'project', 'members', 'milestones']
+        fields = ['name', 'avatar', 'project', 'members', 'milestones', 'team_tier']
 
 
 class ExpertiseAvatarSerializer(serializers.ModelSerializer):
