@@ -218,8 +218,11 @@ class NewPostsViewSet(viewsets.ModelViewSet):
             elif subscription.tier.tier==Tier.FREE:
                 post_query = post_query.exclude(coach=coach, tier__tier__in=[Tier.TIER2, Tier.TIER1])
 
-        if self.request.user.coach:
+        # user might not be a coach, in that case an exception is thrown
+        try:
             post_query = post_query | Post.objects.filter(coach=self.request.user.coach)
+        except Exception:
+            pass
         return post_query.distinct()
 
     def get_serializer_context(self):
@@ -668,6 +671,26 @@ def attach_payment_method(request):
         return Response({'payment_id': payment_method.id})
     if request.method == 'DELETE':
         return Response({'payment_id': None})
+
+
+@api_view(http_method_names=['GET'])
+@permission_classes((permissions.IsAuthenticated,))
+def get_payment_method(request):
+    user = request.user
+    customer_id = request.user.subscriber.customer_id
+
+    customer = stripe.Customer.retrieve(customer_id)
+
+    payment_method_id = customer['invoice_settings']['default_payment_method']
+    if payment_method_id:
+        payment_method = stripe.PaymentMethod.retrieve(payment_method_id)
+        return Response({'payment_method': {
+            'id': payment_method['id'],
+            'card':{
+                'last4': payment_method['card']['last4']
+            },
+        }})
+    return Response({'payment_method': None})
 
 
 @api_view(http_method_names=['PUT', 'DELETE'])
