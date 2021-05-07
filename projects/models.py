@@ -44,6 +44,7 @@ class TeamImage(CommonImage):
 
 
 class Team(models.Model):
+    surrogate = models.UUIDField(default=uuid.uuid4, db_index=True)
     name = models.CharField(max_length=60, null=True, blank=True)
     avatar = models.ForeignKey(TeamImage, on_delete=models.CASCADE, null=True, blank=True, related_name="team")
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="teams", null=True)

@@ -12,6 +12,7 @@ from expertisefields.models import ExpertiseField, ExpertiseFieldAvatar
 from tiers.models import Tier, Benefit
 from reacts.models import React
 from chat.models import ChatRoom, Message, MessageImage
+from awards.models import Award, AwardBase
 from babel.numbers import get_currency_precision
 import channels.layers
 import stripe
@@ -876,6 +877,7 @@ class MyProjectsSerializer(serializers.ModelSerializer):
     milestones = serializers.SerializerMethodField()
     my_team = serializers.SerializerMethodField()
     coach_data = serializers.SerializerMethodField()
+    coach = serializers.SerializerMethodField()
     linked_posts_count = serializers.SerializerMethodField()
     id = serializers.SerializerMethodField()
 
@@ -931,6 +933,12 @@ class MyProjectsSerializer(serializers.ModelSerializer):
 
         return {'number_of_projects_joined': number_of_projects_joined, "id": project.coach.surrogate, "my_tier": TierSerializer(my_tier).data}
 
+    def get_coach(self, project):
+        avatar = None
+        if project.coach.avatar:
+            avatar = project.coach.avatar.image.url
+        return {'name': project.coach.name, 'avatar': avatar}
+
     def get_difficulty(self, obj):
         return obj.get_difficulty_display()
 
@@ -939,9 +947,9 @@ class MyProjectsSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Project
-        fields = ['name', 'description', 'difficulty', 'team_size', 'coach_data',
+        fields = ['name', 'description', 'difficulty', 'team_size', 'coach_data', 'coach',
                   'my_team', 'prerequisites', 'milestones', 'linked_posts_count', 'id']
-        read_only_fields = ['id', 'my_team', 'linked_posts', 'coach_data']
+        read_only_fields = ['id', 'my_team', 'linked_posts', 'coach_data', 'coach']
 
 
 class MyTeamsSerializer(serializers.ModelSerializer):
@@ -1025,7 +1033,7 @@ class TeamSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Team
-        fields = ['name', 'avatar', 'project', 'members', 'milestones', 'team_tier']
+        fields = ['surrogate','name', 'avatar', 'project', 'members', 'milestones', 'team_tier']
 
 
 class ExpertiseAvatarSerializer(serializers.ModelSerializer):
@@ -1142,7 +1150,7 @@ class ChatRoomSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ChatRoom
-        fields = ['id', 'name', 'type', 'members', 'project']
+        fields = ['id', 'name', 'team_type', 'members', 'project']
 
 
 class MessageImageSerializer(serializers.ModelSerializer):
@@ -1225,6 +1233,70 @@ class CreateMessageSerializer(serializers.ModelSerializer):
         model = Message
         fields = ['created', 'updated', 'chat_room', 'user', 'text', 'images']
         read_only_fields = ['created', 'updated', 'user']
+
+
+class AwardBaseSerializer(serializers.ModelSerializer):
+    id = serializers.SerializerMethodField()
+
+    def get_id(self, award):
+        return award.surrogate
+
+    class Meta:
+        model = AwardBase
+        fields = ['id', 'icon', 'is_primary', 'description']
+
+
+class AwardSerializer(serializers.ModelSerializer):
+    award = AwardBaseSerializer()
+    project = ProjectSerializer()
+    subscriber = SubscriberSerializer()
+
+    class Meta:
+        model = Award
+        fields = '__all__'
+
+
+class CreateAwardSerializer(serializers.ModelSerializer):
+    project = serializers.UUIDField(required=False)
+    report = serializers.UUIDField(required=False)
+    subscribers = serializers.ListField(
+        child=serializers.UUIDField(), write_only=True)
+    award = serializers.UUIDField()
+
+    def create(self, validated_data):
+        user = self.context['request'].user.subscriber
+
+        # get necessary objects from report
+        # also try to get the project object through the milestone
+        try:
+            report = MilestoneCompletionReport.objects.get(surrogate=validated_data['report'])
+            project = report.milestone.project
+            milestone = report.milestone
+        except KeyError:
+            milestone = None
+            project = None
+
+        # if milestone was not present in the request search for a project
+        # a use case for this would be 'project-wide' awards
+        if not project:
+            try:
+                project = Project.objects.get(surrogate=validated_data['project'])
+            except KeyError:
+                project = None
+
+        award_base = AwardBase.objects.get(surrogate=validated_data['award'])
+
+        for subscriber_id in validated_data['subscribers']:
+            subscriber = Subscriber.objects.get(surrogate=subscriber_id)
+            award = Award.objects.create(project=project, milestone=milestone, subscriber=subscriber, award=award_base)
+        
+        return {
+            'award': None
+        }
+
+    class Meta:
+        model = Award
+        fields = ['project', 'report', 'subscribers', 'award']
 
 
 class GenericNotificationRelatedField(serializers.RelatedField):

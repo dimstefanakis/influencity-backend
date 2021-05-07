@@ -24,6 +24,7 @@ from expertisefields.models import ExpertiseField
 from comments.models import Comment
 from reacts.models import React
 from chat.models import ChatRoom, Message
+from awards.models import Award, AwardBase
 from . import serializers
 import uuid
 import stripe
@@ -457,6 +458,32 @@ class CreateMessageViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin):
         }
 
 
+class AwardBaseViewSet(viewsets.GenericViewSet, mixins.ListModelMixin):
+    serializer_class = serializers.AwardBaseSerializer
+    permission_classes = [permissions.IsAuthenticated, ]
+    queryset = AwardBase.objects.all()
+
+
+class CreateAwardViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin):
+    serializer_class = serializers.CreateAwardSerializer
+    queryset = AwardBase.objects.all()
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly,]
+
+    def get_serializer_context(self):
+        return {
+            'request': self.request,
+        }
+
+
+class MyAwardsViewSet(viewsets.GenericViewSet, mixins.ListModelMixin):
+    serializer_class = serializers.AwardSerializer
+    permission_classes = [permissions.IsAuthenticated,]
+
+    def get_queryset(self):
+        subscriber = self.request.user.subscriber
+        return subscriber.awards.all()
+
+
 class NotificationsViewSet(viewsets.ModelViewSet):
     queryset = Notification.objects.all()
     serializer_class = serializers.NotificationSerializer
@@ -558,12 +585,12 @@ def join_project(request, id):
 
             # create a new chat room for the team
             chat_room = ChatRoom.objects.create(name=user.subscriber.name, team=new_team,
-                                                type=ChatRoom.TEAM, project=project)
+                                                team_type=ChatRoom.TEAM, project=project)
             chat_room.members.add(user.subscriber)
 
             # also create another chat room for the team + the coach
-            chat_room_with_coach = ChatRoom.objects.create(
-                name=user.subscriber.name, type=ChatRoom.TEAM_WITH_COACH, project=project)
+            chat_room_with_coach = ChatRoom.objects.create(team=new_team, 
+                name=user.subscriber.name, team_type=ChatRoom.TEAM_WITH_COACH, project=project)
             chat_room_with_coach.members.add(
                 user.subscriber, project.coach.user.subscriber)
 
@@ -732,7 +759,6 @@ def update_milestone_report_from_task_id(request, milestone_report_id):
     milestone_report = MilestoneCompletionReport.objects.get(surrogate=milestone_report_id)
 
     if user.coach and milestone_report.milestone.project.coach == user.coach:
-        milestone_completion_report = MilestoneCompletionReport.objects.get()
         serializer = serializers.CoachUpdateMilestoneCompletionReportSerializer(
             milestone_report, data=request.data, partial=True)
         if serializer.is_valid():

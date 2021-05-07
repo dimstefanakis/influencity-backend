@@ -1,9 +1,11 @@
 from django.db import models
-from projects.models import Project
+from projects.models import Project, Milestone
 from subscribers.models import Subscriber
+import uuid
 
 # Create your models here.
 class AwardBase(models.Model):
+    surrogate = models.UUIDField(db_index=True, unique=True, default=uuid.uuid4)
     icon = models.ImageField(upload_to="awards")
 
     # this field is used for future usage
@@ -18,6 +20,7 @@ class AwardBase(models.Model):
 
 
 class Award(models.Model):
-    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="awards")
+    project = models.ForeignKey(Project, on_delete=models.CASCADE ,null=True, blank=True, related_name="awards")
+    milestone = models.ForeignKey(Milestone, on_delete=models.CASCADE, null=True, blank=True, related_name="awards")
     subscriber = models.ForeignKey(Subscriber, on_delete=models.CASCADE, related_name="awards")
     award = models.ForeignKey(AwardBase, on_delete=models.CASCADE, related_name="awards", null=True, blank=True)

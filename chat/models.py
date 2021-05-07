@@ -23,7 +23,7 @@ class ChatRoom(models.Model):
     ]
 
     name = models.CharField(max_length=60, null=True, blank=True)
-    type = models.CharField(max_length=2, choices=TYPES, default=TEAM)
+    team_type = models.CharField(max_length=2, choices=TYPES, default=TEAM)
     members = models.ManyToManyField(Subscriber, related_name="chat_rooms")
     project = models.ForeignKey(Project, on_delete=models.CASCADE, null=True, blank=True, related_name="chat_rooms")
     team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name="chat_rooms", null=True, blank=True)

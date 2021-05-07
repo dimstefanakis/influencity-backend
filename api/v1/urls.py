@@ -13,6 +13,9 @@ router.register(r'coach_application', views.CoachApplicationViewSet, basename="c
 router.register(r'my_coaches', views.MyCoachesViewSet, basename="my_coaches")
 router.register(r'coaches', views.CoachViewSet)
 router.register(r'posts', views.PostViewSet)
+router.register(r'awards/create', views.CreateAwardViewSet)
+router.register(r'awards', views.AwardBaseViewSet)
+router.register(r'my_awards', views.MyAwardsViewSet, basename="my_awards")
 router.register(r'coach/(?P<surrogate>[0-9a-f-]+)/posts', views.CoachPostViewSet)
 router.register(r'new_posts', views.NewPostsViewSet, basename="new_posts")
 router.register(r'chained_posts', views.ChainedPostsViewSet, basename="create_chained_posts")
@@ -56,4 +59,3 @@ urlpatterns = [
     path('v1/comment/<uuid:id>/change_react/', views.change_or_delete_comment_react, name="change_or_delete_comment_react"),
     path('v1/milestone_report/<uuid:milestone_report_id>/update/', views.update_milestone_report_from_task_id, name="update_milestone_report_from_task_id"),
 ]
-
