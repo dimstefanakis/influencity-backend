@@ -1,5 +1,16 @@
 from django.contrib import admin
-from .models import Project, Milestone, Prerequisite, Team, MilestoneCompletionReport, MilestoneCompletionImage, MilestoneCompletionVideo, MilestoneCompletionPlaybackId, MilestoneCompletionVideoAssetMetaData
+from .models import (
+    Project, 
+    Milestone, 
+    Prerequisite, 
+    Team, 
+    MilestoneCompletionReport, 
+    MilestoneCompletionImage, 
+    MilestoneCompletionVideo, 
+    MilestoneCompletionPlaybackId, 
+    MilestoneCompletionVideoAssetMetaData, 
+    Coupon
+)
 
 
 class TeamAdmin(admin.ModelAdmin):
@@ -31,3 +42,4 @@ admin.site.register(MilestoneCompletionReport, MilestoneCompletionReportAdmin)
 admin.site.register(MilestoneCompletionVideo)
 admin.site.register(MilestoneCompletionPlaybackId)
 admin.site.register(MilestoneCompletionVideoAssetMetaData)
+admin.site.register(Coupon)

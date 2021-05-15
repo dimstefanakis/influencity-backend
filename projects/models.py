@@ -1,5 +1,5 @@
 from django.db import models
-from django.db.models.signals import m2m_changed, post_save
+from django.db.models.signals import m2m_changed, post_save, pre_save
 from django.dispatch import receiver
 from notifications.signals import notify
 from notifications.models import Notification
@@ -9,7 +9,29 @@ from subscribers.models import Subscriber
 from common.models import CommonImage
 from instructor.models import Coach
 from accounts.models import User
+from djmoney.models.fields import MoneyField
+from babel.numbers import get_currency_precision
 import uuid
+import stripe
+import os
+
+stripe.api_key = os.environ.get('STRIPE_SECRET_KEY')
+
+def money_to_integer(money):
+    return int(
+        money.amount * (
+            10 ** get_currency_precision(money.currency.code)
+        )
+    )
+
+def create_stripe_price(instance):
+    price = stripe.Price.create(
+        unit_amount=money_to_integer(instance.credit),
+        currency=instance.credit.currency.code.lower(),
+        product=instance.product_id,
+    )
+
+    return price
 
 
 class Project(models.Model):
@@ -34,9 +56,17 @@ class Project(models.Model):
     description = models.TextField(max_length=2000, blank=True, null=True)
     team_size = models.PositiveSmallIntegerField(default=1, blank=False, null=False)
     members = models.ManyToManyField(Subscriber, blank=True, related_name="projects")
+    credit = MoneyField(max_digits=7, decimal_places=2, default_currency='USD', default=10, null=True, blank=True)
+    product_id = models.CharField(max_length=50, null=True, blank=True)
+    price_id = models.CharField(max_length=50, null=True, blank=True)
 
     def __str__(self):
         return self.name
+
+    def save(self, *args, **kwargs):
+        price = create_stripe_price(self)
+        self.price_id = price.id
+        return super().save()
 
 
 class TeamImage(CommonImage):
@@ -52,6 +82,7 @@ class Team(models.Model):
 
     def __str__(self):
         return self.name
+
 
 class Prerequisite(models.Model):
     surrogate = models.UUIDField(default=uuid.uuid4, db_index=True)
@@ -124,6 +155,29 @@ class MilestoneCompletionPlaybackId(models.Model):
     policy = models.CharField(max_length=30)
     playback_id = models.CharField(max_length=100)
     video = models.ForeignKey(MilestoneCompletionVideo, on_delete=models.CASCADE, related_name="playback_ids")
+
+
+class Coupon(models.Model):
+    surrogate = models.UUIDField(default=uuid.uuid4, db_index=True)
+    coach = models.ForeignKey(Coach, on_delete=models.CASCADE, null=True, blank=True, related_name="coupons")
+    subscriber = models.ForeignKey(Subscriber, on_delete=models.CASCADE, null=True, blank=True, related_name="coupons")
+    coupon_id = models.CharField(max_length=30, null=True, blank=True)
+    valid = models.BooleanField(default=True)
+    json_data = models.JSONField(null=True, blank=True)
+
+
+@receiver(pre_save, sender=Project)
+def project_updated(sender, instance, *args, **kwargs):
+    # create stripe Product
+    if not instance.product_id:
+        product = stripe.Product.create(name="%s - %s" % (instance.coach.name, instance.name))
+        instance.product_id = product.id
+    else:
+        pass
+
+    if not instance.price_id:
+        price = create_stripe_price(instance)
+        instance.price_id = price.id
 
 
 @receiver(m2m_changed, sender=Team.members.through)

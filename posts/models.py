@@ -54,8 +54,11 @@ class Post(models.Model):
         # if 'processing' not in kwargs:
         #     # No need to process anything here, post is immidiately available
         #     self.status = self.DONE
-        if self.pk and not self.tiers.exists():#not self.coach.tiers.filter(tier__in=self.tiers).exists():
-            self.tiers.add(self.coach.tiers.first())
+        try:
+            if self.pk and not self.tiers.exists():#not self.coach.tiers.filter(tier__in=self.tiers).exists():
+                self.tiers.add(self.coach.tiers.first())
+        except Exception as e:
+            pass
         return super().save()
 
     class Meta:

@@ -1,11 +1,12 @@
 from django.db.models import Q
 from django.db.models import Count
+from djmoney.money import Money
 from rest_framework import serializers
 from asgiref.sync import async_to_sync
 from accounts.models import User
 from instructor.models import Coach, CoachApplication
 from posts.models import Post, PostImage, PostVideo, PlaybackId
-from projects.models import Project, Prerequisite, Milestone, Team, MilestoneCompletionReport, MilestoneCompletionImage, MilestoneCompletionPlaybackId, MilestoneCompletionVideo
+from projects.models import Project, Prerequisite, Milestone, Team, MilestoneCompletionReport, MilestoneCompletionImage, MilestoneCompletionPlaybackId, MilestoneCompletionVideo, Coupon
 from comments.models import CommentImage, Comment
 from subscribers.models import Subscriber, SubscriberAvatar, Subscription
 from expertisefields.models import ExpertiseField, ExpertiseFieldAvatar
@@ -37,6 +38,7 @@ class CoachSerializer(serializers.ModelSerializer):
     tier = serializers.SerializerMethodField()
     tiers = serializers.SerializerMethodField()
     tier_full = serializers.SerializerMethodField()
+    coupon = serializers.SerializerMethodField()
     number_of_projects_joined = serializers.SerializerMethodField()
 
     @staticmethod
@@ -69,6 +71,16 @@ class CoachSerializer(serializers.ModelSerializer):
         except KeyError:
             return None
 
+    def get_coupon(self, coach):
+        try:
+            user = self.context['request'].user
+            if user.is_authenticated:
+                coupon = Coupon.objects.filter(subscriber=user.subscriber, coach=coach)
+                if coupon.exists():
+                    return CouponSerializer(coupon.first()).data
+        except KeyError:
+            return None
+
     # get number of projects the user has subscribed to for this coach
     # this is used for frontend validation because Tier 1 subscribers only have access to one project
     # and free subs have access to none
@@ -87,7 +99,7 @@ class CoachSerializer(serializers.ModelSerializer):
     class Meta:
         model = Coach
         fields = ['name', 'avatar', 'bio', 'expertise_field', 'projects', 'number_of_projects_joined',
-                  'tier', 'tier_full', 'tiers', 'surrogate', 'charges_enabled']
+                  'tier', 'tier_full', 'tiers', 'surrogate', 'charges_enabled', 'coupon']
 
 
 class CoachApplicationSerializer(serializers.ModelSerializer):
@@ -312,6 +324,28 @@ class MilestoneCompletionReportSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+class MyCouponSerializer(serializers.ModelSerializer):
+    coach = serializers.SerializerMethodField()
+    subscriber = SubscriberSerializer()
+
+    def get_coach(self, coupon):
+        return {
+            'coach_id': coupon.coach.surrogate
+        }
+
+    class Meta:
+        model = Coupon
+        fields = ['surrogate', 'coupon_id', 'subscriber', 'coach', 'valid', 'json_data']
+        read_only_fields = fields
+
+
+class CouponSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Coupon
+        fields = ['surrogate', 'coupon_id', 'valid', 'json_data']
+        read_only_fields = fields
+
+
 class ProjectSerializer(serializers.ModelSerializer):
     prerequisites = PrerequisiteSerializer(many=True)
     milestones = MilestoneSerializer(many=True)
@@ -377,7 +411,7 @@ class ProjectSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Project
-        fields = ['name', 'description', 'difficulty', 'linked_posts_count', 'coach',
+        fields = ['name', 'credit', 'description', 'difficulty', 'linked_posts_count', 'coach',
                   'team_size', 'prerequisites', 'milestones', 'coach_data', 'team_data', 'id']
         read_only_fields = ['linked_posts', 'coach_data', 'team_data', 'coach']
 
@@ -390,6 +424,7 @@ class CreateOrUpdateProjectSerializer(serializers.ModelSerializer):
         child=serializers.JSONField(), write_only=True, required=False)
     attached_posts = serializers.ListField(
         child=serializers.UUIDField(), write_only=True, required=False)
+    credit = serializers.CharField(write_only=True, required=False)
 
     def create(self, validated_data):
         coach = self.context['request'].user.coach
@@ -450,6 +485,17 @@ class CreateOrUpdateProjectSerializer(serializers.ModelSerializer):
         except KeyError:
             milestones = []
 
+        # default project price
+        credit = instance.credit
+
+        try:
+            new_credit = validated_data.pop('credit')
+            credit = Money(new_credit.replace(',', '.'), 'USD')
+        except Exception as e:
+            pass
+
+        instance.credit = credit
+
         for milestone in milestones:
             milestone = json.loads(milestone)
             # try:
@@ -472,10 +518,9 @@ class CreateOrUpdateProjectSerializer(serializers.ModelSerializer):
             instance.posts.clear()
         except KeyError:
             attached_posts = []
-
         for post_id in attached_posts:
             post = Post.objects.get(surrogate=post_id)
-            post.linked_project = project
+            post.linked_project = instance
             post.save()
         instance = super(CreateOrUpdateProjectSerializer,
                          self).update(instance, validated_data)
@@ -483,9 +528,9 @@ class CreateOrUpdateProjectSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Project
-        fields = ['name', 'description', 'difficulty', 'team_size',
+        fields = ['name', 'credit', 'description', 'difficulty', 'team_size',
                   'prerequisites', 'milestones', 'attached_posts', 'id', 'surrogate']
-        read_only_fields = ['id', 'surrogate']
+        read_only_fields = ['id', 'credit', 'surrogate']
 
 
 class PostImageSerializer(serializers.ModelSerializer):
@@ -947,9 +992,9 @@ class MyProjectsSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Project
-        fields = ['name', 'description', 'difficulty', 'team_size', 'coach_data', 'coach',
+        fields = ['name', 'credit', 'description', 'difficulty', 'team_size', 'coach_data', 'coach',
                   'my_team', 'prerequisites', 'milestones', 'linked_posts_count', 'id']
-        read_only_fields = ['id', 'my_team', 'linked_posts', 'coach_data', 'coach']
+        read_only_fields = ['id', 'credit', 'my_team', 'linked_posts', 'coach_data', 'coach']
 
 
 class MyTeamsSerializer(serializers.ModelSerializer):

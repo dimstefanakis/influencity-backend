@@ -18,7 +18,7 @@ from accounts.models import User
 from subscribers.models import Subscriber, Subscription
 from instructor.models import Coach, CoachApplication
 from posts.models import Post, PostVideoAssetMetaData, PlaybackId, PostVideo
-from projects.models import Project, Team, MilestoneCompletionReport, Milestone, MilestoneCompletionVideo, MilestoneCompletionVideoAssetMetaData, MilestoneCompletionPlaybackId
+from projects.models import Project, Team, MilestoneCompletionReport, Milestone, MilestoneCompletionVideo, MilestoneCompletionVideoAssetMetaData, MilestoneCompletionPlaybackId, Coupon
 from tiers.models import Tier
 from expertisefields.models import ExpertiseField
 from comments.models import Comment
@@ -163,6 +163,19 @@ class MyCoachesViewSet(viewsets.ModelViewSet):
         }
 
 
+class MyCouponsViewSet(viewsets.ModelViewSet):
+    permission_classes = [permissions.IsAuthenticated, ]
+    serializer_class = serializers.MyCouponSerializer
+
+    def get_queryset(self):
+        return Coupon.objects.filter(subscriber=self.request.user.subscriber)
+
+    def get_serializer_context(self):
+        return {
+            'request': self.request,
+        }
+
+
 class PostViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated, ]
     queryset = Post.objects.all()
@@ -192,7 +205,7 @@ class CoachPostViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         surrogate = self.kwargs['surrogate']
-        return Post.objects.filter(coach__surrogate=surrogate)
+        return Post.objects.filter(coach__surrogate=surrogate).exclude(parent_post__isnull=False)
 
 
 class ChainedPostsViewSet(generics.ListCreateAPIView, viewsets.GenericViewSet):
@@ -221,7 +234,7 @@ class NewPostsViewSet(viewsets.ModelViewSet):
 
         # user might not be a coach, in that case an exception is thrown
         try:
-            post_query = post_query | Post.objects.filter(coach=self.request.user.coach)
+            post_query = post_query | Post.objects.filter(coach=self.request.user.coach).exclude(parent_post__isnull=False)
         except Exception:
             pass
         return post_query.distinct()
@@ -536,6 +549,8 @@ def join_project(request, id):
     project = Project.objects.filter(surrogate=id)
     if project.exists():
         project = project.first()
+        # this will later be used for validation
+        invoice = None
 
         # Do some tier validation here
         subscription = Subscription.objects.filter(subscriber=user.subscriber, tier__coach=project.coach)
@@ -545,10 +560,64 @@ def join_project(request, id):
         if subscription.tier.tier == Tier.FREE:
             return Response({'error': 'Free tier subscribers cannot join projects'})
         elif subscription.tier.tier == Tier.TIER1:
-            # check if user has already subscribed to one of the coach's project
-            # Tier 1 subscribers have access to only 1 of the project so in this case we return error
-            if Team.objects.filter(project__coach=project.coach, members__in=[user.subscriber]).exists():
-                return Response({'error': 'Tier 1 subscribers have access to only one project'})
+            coupon = Coupon.objects.filter(subscriber=request.user.subscriber, coach=project.coach)
+
+            if coupon.exists():
+                coupon = coupon.first()
+                try:
+                    price = stripe.Price.retrieve(
+                        project.price_id,
+                    )
+                    if coupon.valid:
+                        invoice_item = stripe.InvoiceItem.create(
+                            customer=request.user.subscriber.customer_id,
+                            price=project.price_id,
+                            currency="usd",
+                            #amount=price.unit_amount,
+                            discounts=[{
+                                'coupon': coupon.coupon_id,
+                            }],
+                        )
+
+                        # using int rounds down
+                        invoice = stripe.Invoice.create(
+                            customer=request.user.subscriber.customer_id,
+                            application_fee_amount=int(price.unit_amount * 0.2),
+                            transfer_data={
+                                "destination": project.coach.stripe_id,
+                            },
+                        )
+
+                        invoice = stripe.Invoice.pay(invoice.id)
+
+                        # disable coupon after using it
+                        coupon.valid = False
+                        coupon.save()
+                    else:
+                        invoice_item = stripe.InvoiceItem.create(
+                            customer=request.user.subscriber.customer_id,
+                            price=project.price_id,
+                            #amount=price.unit_amount,
+                            currency="usd",
+                        )
+
+                        # using int rounds down
+                        invoice = stripe.Invoice.create(
+                            customer=request.user.subscriber.customer_id,
+                            application_fee_amount=int(price.unit_amount * 0.2),
+                            transfer_data={
+                                "destination": project.coach.stripe_id,
+                            },
+                        )
+
+                        invoice = stripe.Invoice.pay(invoice.id)
+
+                except Exception as e:
+                    return Response({'error': 'An error occured during your purchase'})
+            # # check if user has already subscribed to one of the coach's project
+            # # Tier 1 subscribers have access to only 1 of the project so in this case we return error
+            # if Team.objects.filter(project__coach=project.coach, members__in=[user.subscriber]).exists():
+            #     return Response({'error': 'Tier 1 subscribers have access to only one project'})
 
         # This algorithm is not optimal and should be fixed in the future
         # Currently there is no equal distribution of members across teams
@@ -558,46 +627,49 @@ def join_project(request, id):
         # until "average" is reached and once that is reached populate other teams. That should reduce the
         # team size gap between teams
 
-        team_found = False
+        # invoice needs to be populated regardless if the project was free or not
+        if invoice['status'] == 'paid':
+            team_found = False
 
-        # First try to find a team with empty spots and add the user there
-        for team in project.teams.all():
-            if team.members.count() < project.team_size:
-                team_found = True
-                team.members.add(user.subscriber)
+            # First try to find a team with empty spots and add the user there
+            for team in project.teams.all():
+                if team.members.count() < project.team_size:
+                    team_found = True
+                    team.members.add(user.subscriber)
 
-                # add the user to all available chat rooms for this project
-                chat_rooms = ChatRoom.objects.filter(
-                    project=project, team=team)
-                for chat_room in chat_rooms:
-                    chat_room.members.add(user.subscriber)
+                    # add the user to all available chat rooms for this project
+                    chat_rooms = ChatRoom.objects.filter(
+                        project=project, team=team)
+                    for chat_room in chat_rooms:
+                        chat_room.members.add(user.subscriber)
+
+                    return Response({'team': serializers.TeamSerializer(
+                        team,
+                        context={'request': request,
+                                'project': project}).data})
+
+            # If no empty teams are found / or created create a new team only with this member
+            if not team_found:
+                new_team = Team.objects.create(
+                    project=project, name=user.subscriber.name)
+                new_team.members.add(user.subscriber)
+
+                # create a new chat room for the team
+                chat_room = ChatRoom.objects.create(name=user.subscriber.name, team=new_team,
+                                                    team_type=ChatRoom.TEAM, project=project)
+                chat_room.members.add(user.subscriber)
+
+                # also create another chat room for the team + the coach
+                chat_room_with_coach = ChatRoom.objects.create(team=new_team, 
+                    name=user.subscriber.name, team_type=ChatRoom.TEAM_WITH_COACH, project=project)
+                chat_room_with_coach.members.add(
+                    user.subscriber, project.coach.user.subscriber)
 
                 return Response({'team': serializers.TeamSerializer(
-                    team,
+                    new_team,
                     context={'request': request,
-                             'project': project}).data})
-
-        # If no empty teams are found / or created create a new team only with this member
-        if not team_found:
-            new_team = Team.objects.create(
-                project=project, name=user.subscriber.name)
-            new_team.members.add(user.subscriber)
-
-            # create a new chat room for the team
-            chat_room = ChatRoom.objects.create(name=user.subscriber.name, team=new_team,
-                                                team_type=ChatRoom.TEAM, project=project)
-            chat_room.members.add(user.subscriber)
-
-            # also create another chat room for the team + the coach
-            chat_room_with_coach = ChatRoom.objects.create(team=new_team, 
-                name=user.subscriber.name, team_type=ChatRoom.TEAM_WITH_COACH, project=project)
-            chat_room_with_coach.members.add(
-                user.subscriber, project.coach.user.subscriber)
-
-            return Response({'team': serializers.TeamSerializer(
-                new_team,
-                context={'request': request,
-                         'project': project}).data})
+                            'project': project}).data})
+        return Response({'error': 'An error occured during your purchase'})
 
 
 @api_view(http_method_names=['POST', 'DELETE'])
@@ -624,7 +696,12 @@ def subscribe(request, id):
                 items=[{
                     'id': subscription['items']['data'][0].id,
                     'price': tier.price_id,
-                }]
+                }],
+                expand=["latest_invoice.payment_intent"],
+                application_fee_percent=20,
+                transfer_data={
+                    "destination": tier.coach.stripe_id,
+                }           
             )
 
             sub_instance.tier = tier
@@ -646,12 +723,30 @@ def subscribe(request, id):
             items=[{
                 'price': tier.price_id,
             }],
+            application_fee_percent=20,
+            transfer_data={
+                "destination": tier.coach.stripe_id,
+            },
         )
 
-        Subscription.objects.create(subscriber=request.user.subscriber, subscription_id=subscription.id,
-                                    customer_id=request.user.subscriber.customer_id, json_data=json.dumps(
-                                        subscription),
-                                    tier=tier, price_id=tier.price_id)
+        # If user is choosing any of the premium subcriptions (only tier 1 for now) create a coupon for a free project on the specific coach
+        if tier.tier != tier.FREE:
+            coupon = None
+            # Also create a coupon if it doesn't exist
+            if not Coupon.objects.filter(subscriber=user.subscriber, coach=tier.coach).exists():
+                coupon = stripe.Coupon.create(
+                    percent_off=100,
+                    duration="once",
+                )
+
+            Subscription.objects.create(subscriber=request.user.subscriber, subscription_id=subscription.id,
+                                        customer_id=request.user.subscriber.customer_id, json_data=json.dumps(
+                                            subscription),
+                                        tier=tier, price_id=tier.price_id)
+            
+            if coupon:
+                Coupon.objects.create(coach=tier.coach, subscriber=user.subscriber,
+                coupon_id=coupon.id, valid=coupon.valid, json_data=json.dumps(coupon))
         # tier.subscribers.add(user)
     if request.method == 'DELETE':
         subcription = Subscription.objects.filter(subscriber=request.user.subscriber,
