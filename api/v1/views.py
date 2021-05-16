@@ -113,10 +113,10 @@ class CoachViewSet(viewsets.ModelViewSet):
                                     'update': [permissions.IsAuthenticated],
                                     'partial_update': [permissions.IsAuthenticated],
                                     'list': [permissions.AllowAny],
-                                    'retreive': [permissions.AllowAny]}
+                                    'retrieve': [permissions.AllowAny]}
 
     def get_queryset(self):
-        queryset = Coach.objects.all()
+        queryset = Coach.objects.filter(charges_enabled=True)
         username = self.request.query_params.get('username', None)
         return queryset
 
