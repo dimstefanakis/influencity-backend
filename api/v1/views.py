@@ -1,4 +1,5 @@
 import os
+from collections import OrderedDict
 import mux_python
 from mux_python.rest import ApiException
 from django.contrib.sites.models import Site
@@ -34,6 +35,33 @@ import os
 stripe.api_key = os.environ.get('STRIPE_SECRET_KEY')
 
 
+class CursorPaginationWithCount(CursorPagination):
+    def paginate_queryset(self, queryset, request, view=None):
+        self.count = self.get_count(queryset)
+        return super().paginate_queryset(queryset, request, view)
+
+    def get_count(self, queryset):
+        """
+        Determine an object count, supporting either querysets or regular lists.
+        """
+        try:
+            return queryset.count()
+        except (AttributeError, TypeError):
+            return len(queryset)
+
+    def get_paginated_response(self, data):
+        return Response(
+            OrderedDict(
+                [
+                    ("next", self.get_next_link()),
+                    ("previous", self.get_previous_link()),
+                    ("count", self.count),
+                    ("results", data),
+                ]
+            )
+        )
+
+
 class MessagePagination(CursorPagination):
     page_size = 20
     max_page_size = 100
@@ -44,7 +72,7 @@ class CommentPagination(CursorPagination):
     max_page_size = 100
 
 
-class PostPagination(CursorPagination):
+class PostPagination(CursorPaginationWithCount):
     page_size = 15
     max_page_size = 30
 

@@ -156,4 +156,4 @@ def create_tiers(sender, instance, created, **kwargs):
     if created:
         Tier.objects.create(coach=instance, tier=Tier.FREE)
         Tier.objects.create(coach=instance, tier=Tier.TIER1)
-        Tier.objects.create(coach=instance, tier=Tier.TIER2)
+        #Tier.objects.create(coach=instance, tier=Tier.TIER2)
