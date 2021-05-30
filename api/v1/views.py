@@ -21,7 +21,7 @@ from instructor.models import Coach, CoachApplication
 from posts.models import Post, PostVideoAssetMetaData, PlaybackId, PostVideo
 from projects.models import Project, Team, MilestoneCompletionReport, Milestone, MilestoneCompletionVideo, MilestoneCompletionVideoAssetMetaData, MilestoneCompletionPlaybackId, Coupon
 from tiers.models import Tier
-from expertisefields.models import ExpertiseField
+from expertisefields.models import ExpertiseField, ExpertiseFieldSuggestion
 from comments.models import Comment
 from reacts.models import React
 from chat.models import ChatRoom, Message
@@ -144,7 +144,11 @@ class CoachViewSet(viewsets.ModelViewSet):
                                     'retrieve': [permissions.AllowAny]}
 
     def get_queryset(self):
-        queryset = Coach.objects.filter(charges_enabled=True)
+        if self.action=='list' or self.action=='retrieve':
+            queryset = Coach.objects.filter(charges_enabled=True)
+        else:
+            queryset = Coach.objects.all()
+
         username = self.request.query_params.get('username', None)
         return queryset
 
@@ -558,10 +562,29 @@ def subscriber_me(request):
     subscriber = Subscriber.objects.filter(user=user.pk).first()
     if request.method == 'GET':
         serializer = serializers.SubscriberSerializer(subscriber)
-        return Response(serializers.SubscriberSerializer)
+        return Response(serializer.data)
     elif request.method == 'PATCH':
         serializer = serializers.SubscriberUpdateSerializer(
             subscriber, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(http_method_names=['GET', 'PATCH'])
+@permission_classes((permissions.IsAuthenticated,))
+def coach_me(request):
+    user = request.user
+
+    # this might be unnecessary since subcriber is accessible through user
+    coach = Coach.objects.filter(user=user.pk).first()
+    if request.method == 'GET':
+        serializer = serializers.CoachSerializer(coach, context={'request':request})
+        return Response(serializer.data)
+    elif request.method == 'PATCH':
+        serializer = serializers.CoachSerializer(
+            coach, context={'request': request}, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_200_OK)
@@ -892,6 +915,27 @@ def update_milestone_report_from_task_id(request, milestone_report_id):
         # TODO
         # create another SubscriberUpdateMilestoneSerializer for subscribers to edit their report
         pass
+
+    return Response({'error': 'An unexpected error has occured'})
+
+@api_view(http_method_names=['POST'])
+@permission_classes((permissions.IsAuthenticated,))
+def select_expertise(request):
+    user = request.user
+    if user.coach:
+        # ideally we would set this in the if block below
+        # but it's important for the user to not get stuck on the "select expertise screen"
+        # so we accept soft errors
+        user.coach.submitted_expertise = True
+        if request.data['expertise']:
+            expertise_field = ExpertiseField.objects.filter(name=request.data['expertise'])
+            if expertise_field.exists():
+                expertise_field = expertise_field.first()
+                user.coach.expertise_field = expertise_field
+            else:
+                # Can safely populate this, we later see results in the admin panel
+                ExpertiseFieldSuggestion.objects.create(name=request.data['expertise'], suggested_by=user.coach)
+        user.coach.save()
 
     return Response({'error': 'An unexpected error has occured'})
 

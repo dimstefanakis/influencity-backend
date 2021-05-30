@@ -17,6 +17,7 @@ from awards.models import Award, AwardBase
 from babel.numbers import get_currency_precision
 import channels.layers
 import stripe
+from decimal import Decimal
 import json
 import os
 
@@ -24,11 +25,18 @@ stripe.api_key = os.environ.get('STRIPE_SECRET_KEY')
 
 
 def money_to_integer(money):
-    return int(
-        money.amount * (
-            10 ** get_currency_precision(money.currency.code)
+    try:
+        return int(
+            money.amount * (
+                10 ** get_currency_precision(money.currency.code)
+            )
         )
-    )
+    except AttributeError as e:
+        return int(
+            int(money) * (
+                10 ** get_currency_precision('usd')
+            )
+        )
 
 
 class CoachSerializer(serializers.ModelSerializer):
@@ -99,7 +107,7 @@ class CoachSerializer(serializers.ModelSerializer):
     class Meta:
         model = Coach
         fields = ['name', 'avatar', 'bio', 'expertise_field', 'projects', 'number_of_projects_joined',
-                  'tier', 'tier_full', 'tiers', 'surrogate', 'charges_enabled', 'coupon']
+                  'tier', 'tier_full', 'tiers', 'surrogate', 'charges_enabled', 'coupon', 'seen_welcome_page', 'submitted_expertise']
 
 
 class CoachApplicationSerializer(serializers.ModelSerializer):
@@ -494,6 +502,12 @@ class CreateOrUpdateProjectSerializer(serializers.ModelSerializer):
         except Exception as e:
             pass
 
+
+        try:
+            difficulty = validated_data.pop('difficulty')
+            instance.difficulty = difficulty
+        except Exception as e:
+            pass
         instance.credit = credit
 
         for milestone in milestones:
@@ -1147,17 +1161,26 @@ class UpdateTierSerializer(serializers.ModelSerializer):
                     update_benefit.description = description
                     update_benefit.save()
             else:
-                Benefit.objects.create(tier=instance, description=description)
+                if description:
+                    Benefit.objects.create(tier=instance, description=description)
 
         try:
             credit = validated_data.pop('credit')
             if instance.credit != credit:
-                price = stripe.Price.create(
-                    unit_amount=money_to_integer(credit),
-                    currency=credit.currency.code.lower(),
-                    recurring={"interval": "month"},
-                    product=instance.product_id,
-                )
+                if isinstance(credit, Decimal):
+                    price = stripe.Price.create(
+                        unit_amount=money_to_integer(credit),
+                        currency='usd',
+                        recurring={"interval": "month"},
+                        product=instance.product_id,
+                    )
+                else:
+                    price = stripe.Price.create(
+                        unit_amount=money_to_integer(credit),
+                        currency=credit.currency.code.lower(),
+                        recurring={"interval": "month"},
+                        product=instance.product_id,
+                    )
                 instance.price_id = price.id
         except KeyError:
             pass

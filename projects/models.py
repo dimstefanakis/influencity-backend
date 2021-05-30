@@ -64,6 +64,11 @@ class Project(models.Model):
         return self.name
 
     def save(self, *args, **kwargs):
+        if not self.product_id:
+            product = stripe.Product.create(name="%s - %s" % (self.coach.name, self.name))
+            self.product_id = product.id
+        else:
+            pass
         price = create_stripe_price(self)
         self.price_id = price.id
         return super().save()

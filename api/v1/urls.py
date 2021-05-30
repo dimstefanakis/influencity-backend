@@ -43,6 +43,7 @@ router.register(r'create_message', views.CreateMessageViewSet, basename="create_
 urlpatterns = [
     path('v1/', include(router.urls)),
     path('v1/subscriber/me/', views.subscriber_me, name="subscriber_me"),
+    path('v1/coach/me/', views.coach_me, name="coach_me"),
     path('v1/subscribe/<uuid:id>', views.subscribe, name="subscribe"),
     path('v1/join_project/<uuid:id>', views.join_project, name="join_project"),
     path('v1/unread_notifications_count/', views.get_unread_count, name="get_unread_count"),
@@ -59,4 +60,5 @@ urlpatterns = [
     path('v1/posts/<uuid:id>/change_react/', views.change_or_delete_react, name="change_or_delete_react"),
     path('v1/comment/<uuid:id>/change_react/', views.change_or_delete_comment_react, name="change_or_delete_comment_react"),
     path('v1/milestone_report/<uuid:milestone_report_id>/update/', views.update_milestone_report_from_task_id, name="update_milestone_report_from_task_id"),
+    path('v1/select_expertise/', views.select_expertise, name="select_expertise"),
 ]

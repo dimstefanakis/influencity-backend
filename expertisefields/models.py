@@ -17,3 +17,11 @@ class ExpertiseFieldAvatar(CommonImage):
 
     def __str__(self):
         return str(self.expertise_field)
+
+
+class ExpertiseFieldSuggestion(models.Model):
+    name = models.CharField(max_length=100)
+    suggested_by = models.ForeignKey('instructor.Coach', on_delete=models.CASCADE, null=True, blank=True, related_name="suggested_expertise")
+
+    def __str__(self):
+        return str(self.name)

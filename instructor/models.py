@@ -26,6 +26,8 @@ class Coach(CommonUser):
     subscribers = models.ManyToManyField(User, null=True, blank=True, related_name="coaches")
     expertise_field = models.ForeignKey(ExpertiseField, on_delete=models.CASCADE, null=True)
     bio = models.CharField(max_length=160, blank=True, null=True)
+    seen_welcome_page = models.BooleanField(default=False)
+    submitted_expertise = models.BooleanField(default=False)
 
     # required for stripe
     stripe_id = models.CharField(max_length=40, null=True, blank=True)
