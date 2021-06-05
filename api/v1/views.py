@@ -14,6 +14,8 @@ from rest_framework.pagination import CursorPagination
 from rest_framework.decorators import parser_classes
 from rest_framework.parsers import MultiPartParser, JSONParser
 from django_filters import rest_framework as filters
+from asgiref.sync import async_to_sync
+from notifications.signals import notify
 from notifications.models import Notification
 from accounts.models import User
 from subscribers.models import Subscriber, Subscription
@@ -30,6 +32,7 @@ from . import serializers
 import uuid
 import stripe
 import json
+import channels.layers
 import os
 
 stripe.api_key = os.environ.get('STRIPE_SECRET_KEY')
@@ -723,6 +726,20 @@ def join_project(request, id):
         return Response({'error': 'An error occured during your purchase'})
 
 
+def send_notification_on_subscribe(subscriber, tier, subscription):
+    channel_layer = channels.layers.get_channel_layer()
+    notification_data = notify.send(subscriber, recipient=tier.coach.user, verb=f'{subscriber.name} Just subscribed on your {tier.label.lower()} tier!', action_object=subscription)
+
+    notification = notification_data[0][1][0]
+    async_to_sync(channel_layer.group_send)(
+        f"{str(tier.coach.user.surrogate)}.notifications.group",
+        {
+            'type': 'send.notification',
+            'id': notification.id
+        }
+    )
+
+
 @api_view(http_method_names=['POST', 'DELETE'])
 @parser_classes([JSONParser])
 @permission_classes((permissions.IsAuthenticated,))
@@ -790,7 +807,7 @@ def subscribe(request, id):
                     duration="once",
                 )
 
-            Subscription.objects.create(subscriber=request.user.subscriber, subscription_id=subscription.id,
+            created_subscription = Subscription.objects.create(subscriber=request.user.subscriber, subscription_id=subscription.id,
                                         customer_id=request.user.subscriber.customer_id, json_data=json.dumps(
                                             subscription),
                                         tier=tier, price_id=tier.price_id)
@@ -798,6 +815,9 @@ def subscribe(request, id):
             if coupon:
                 Coupon.objects.create(coach=tier.coach, subscriber=user.subscriber,
                 coupon_id=coupon.id, valid=coupon.valid, json_data=json.dumps(coupon))
+            
+            # Also send coach notification about new subscriber
+            send_notification_on_subscribe(user.subscriber, tier, created_subscription)
         # tier.subscribers.add(user)
     if request.method == 'DELETE':
         subcription = Subscription.objects.filter(subscriber=request.user.subscriber,
@@ -1087,7 +1107,10 @@ def get_stripe_balance(request):
         stripe_account=request.user.coach.stripe_id
     )
     print(balance)
-    return Response({'balance': balance['available'][0]['amount']})
+    return Response({
+        'available': balance['available'][0]['amount'] / 100, 
+        'pending':  balance['pending'][0]['amount'] / 100
+    })
 
 
 @csrf_exempt

@@ -462,8 +462,10 @@ class CreateOrUpdateProjectSerializer(serializers.ModelSerializer):
             post.save()
 
         for prerequisite in prerequisites:
-            Prerequisite.objects.create(
-                description=prerequisite, project=project)
+            # make sure it's not empty string
+            if prerequisite:
+                Prerequisite.objects.create(
+                    description=prerequisite, project=project)
 
         for milestone in milestones:
             milestone = json.loads(milestone)
@@ -1124,16 +1126,20 @@ class BenefitSerializer(serializers.ModelSerializer):
 
 class TierSerializer(serializers.ModelSerializer):
     tier_full = serializers.SerializerMethodField()
+    post_count = serializers.SerializerMethodField()
     benefits = BenefitSerializer(many=True)
 
     def get_tier_full(self, obj):
         return obj.get_tier_display()
 
+    def get_post_count(self, tier):
+        return tier.posts.count()
+
     class Meta:
         model = Tier
         fields = ['id', 'surrogate', 'tier', 'tier_full',
-                  'label', 'subheading', 'credit', 'benefits']
-        read_only_fields = ['id', 'surrogate', 'tier', 'tier_full']
+                  'label', 'subheading', 'credit', 'benefits', 'post_count']
+        read_only_fields = ['id', 'surrogate', 'tier', 'tier_full', 'post_count']
 
 
 class UpdateTierSerializer(serializers.ModelSerializer):
