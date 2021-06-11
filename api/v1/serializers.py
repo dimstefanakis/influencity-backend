@@ -407,12 +407,12 @@ class ProjectSerializer(serializers.ModelSerializer):
 
                     # no need to return only the ACCEPTED milestones
                     number_of_tasks_completed = MilestoneCompletionReport.objects.filter(
-                        milestone__project=project).filter(Q(status=MilestoneCompletionReport.PENDING) | Q(status=MilestoneCompletionReport.ACCEPTED)).count()
+                        milestone__project=project).filter(Q(status=MilestoneCompletionReport.PENDING) | Q(status=MilestoneCompletionReport.ACCEPTED)).distinct('milestone', 'team').count()
 
                     number_of_tasks_reviewed = MilestoneCompletionReport.objects.filter(
                         milestone__project=project, status=MilestoneCompletionReport.ACCEPTED).count()
                     number_of_tasks_not_reviewed = MilestoneCompletionReport.objects.filter(
-                        milestone__project=project, status=MilestoneCompletionReport.PENDING).count()
+                        milestone__project=project, status=MilestoneCompletionReport.PENDING).distinct('milestone', 'team').count()
                     return {'team_count': team_count, 'number_of_tasks_completed': number_of_tasks_completed, 'number_of_tasks_reviewed': number_of_tasks_reviewed, 'number_of_tasks_not_reviewed': number_of_tasks_not_reviewed}
         except KeyError:
             return None
@@ -427,7 +427,7 @@ class ProjectSerializer(serializers.ModelSerializer):
 class CreateOrUpdateProjectSerializer(serializers.ModelSerializer):
     # the below 2 contain a list of descriptions for both prerequisites and milestones
     prerequisites = serializers.ListField(
-        child=serializers.CharField(), write_only=True, required=False)
+        child=serializers.CharField(allow_blank=True), write_only=True, required=False)
     milestones = serializers.ListField(
         child=serializers.JSONField(), write_only=True, required=False)
     attached_posts = serializers.ListField(
@@ -597,8 +597,8 @@ class PostSerializer(serializers.ModelSerializer):
     images = PostImageSerializer(many=True)
     videos = PostVideoSerializer(many=True)
     reacted = serializers.SerializerMethodField()
-    # reacts = ReactSerializer()
     reacts = serializers.SerializerMethodField()
+    comment_count = serializers.SerializerMethodField()
     id = serializers.SerializerMethodField()
 
     def get_id(self, post):
@@ -616,10 +616,13 @@ class PostSerializer(serializers.ModelSerializer):
     def get_reacts(self, post):
         return post.reacts.count()
 
+    def get_comment_count(self, post):
+        return post.comments.count()
+
     class Meta:
         model = Post
         fields = ['status', 'text', 'coach', 'images', 'videos', 'tier', 'tiers',
-                  'chained_posts', 'id', 'linked_project', 'reacted', 'reacts']
+                  'chained_posts', 'id', 'linked_project', 'reacted', 'reacts', 'comment_count']
 
     def get_fields(self):
         fields = super(PostSerializer, self).get_fields()
@@ -1294,7 +1297,7 @@ class CreateMessageSerializer(serializers.ModelSerializer):
                 'images': json.dumps(images_sent),
                 'user_id': str(message.user.surrogate),
                 'user_name': message.user.name,
-                'user_avatar': message.user.avatar.image.url,
+                'user_avatar': message.user.avatar.image.url if message.user.avatar else None,
                 'room': str(message.chat_room.surrogate)
             }
         )

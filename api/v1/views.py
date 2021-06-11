@@ -70,7 +70,7 @@ class MessagePagination(CursorPagination):
     max_page_size = 100
 
 
-class CommentPagination(CursorPagination):
+class CommentPagination(CursorPaginationWithCount):
     page_size = 10
     max_page_size = 100
 
@@ -240,7 +240,30 @@ class CoachPostViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         surrogate = self.kwargs['surrogate']
-        return Post.objects.filter(coach__surrogate=surrogate).exclude(parent_post__isnull=False)
+        coach = Coach.objects.filter(surrogate=surrogate).first()
+        post_query = Post.objects.none()
+        subscription = Subscription.objects.filter(subscriber=self.request.user.subscriber, tier__coach=coach).first()
+        # by default get all posts available (except the ones that are chained to others, in that case just get the initial), 
+        # later we exclude posts based on the user subscription
+        post_query |= coach.posts.exclude(parent_post__isnull=False)
+            
+        if subscription:
+            # if use has subscriberd to tier 1 exclude tier 2 posts
+            if subscription.tier.tier==Tier.TIER1:
+                post_query = post_query.exclude(coach=coach, tier__tier=Tier.TIER2)
+            elif subscription.tier.tier==Tier.FREE:
+                post_query = post_query.exclude(coach=coach, tier__tier__in=[Tier.TIER2, Tier.TIER1])
+        else:
+            post_query = post_query.exclude(coach=coach, tier__tier__in=[Tier.TIER2, Tier.TIER1])
+
+        # user might not be a coach, in that case an exception is thrown
+        try:
+            post_query = post_query | Post.objects.filter(coach=self.request.user.coach).exclude(parent_post__isnull=False)
+        except Exception:
+            pass
+        return post_query.distinct()
+
+        #return Post.objects.filter(coach__surrogate=surrogate).exclude(parent_post__isnull=False)
 
 
 class ChainedPostsViewSet(generics.ListCreateAPIView, viewsets.GenericViewSet):
@@ -816,8 +839,14 @@ def subscribe(request, id):
                 Coupon.objects.create(coach=tier.coach, subscriber=user.subscriber,
                 coupon_id=coupon.id, valid=coupon.valid, json_data=json.dumps(coupon))
             
-            # Also send coach notification about new subscriber
-            send_notification_on_subscribe(user.subscriber, tier, created_subscription)
+        else:
+            created_subscription = Subscription.objects.create(subscriber=request.user.subscriber, subscription_id=subscription.id,
+                            customer_id=request.user.subscriber.customer_id, json_data=json.dumps(
+                                subscription),
+                            tier=tier, price_id=tier.price_id)
+        
+        # Also send coach notification about new subscriber
+        send_notification_on_subscribe(user.subscriber, tier, created_subscription)
         # tier.subscribers.add(user)
     if request.method == 'DELETE':
         subcription = Subscription.objects.filter(subscriber=request.user.subscriber,
