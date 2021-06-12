@@ -256,14 +256,7 @@ class CoachPostViewSet(viewsets.ModelViewSet):
         else:
             post_query = post_query.exclude(coach=coach, tier__tier__in=[Tier.TIER2, Tier.TIER1])
 
-        # user might not be a coach, in that case an exception is thrown
-        try:
-            post_query = post_query | Post.objects.filter(coach=self.request.user.coach).exclude(parent_post__isnull=False)
-        except Exception:
-            pass
         return post_query.distinct()
-
-        #return Post.objects.filter(coach__surrogate=surrogate).exclude(parent_post__isnull=False)
 
 
 class ChainedPostsViewSet(generics.ListCreateAPIView, viewsets.GenericViewSet):
