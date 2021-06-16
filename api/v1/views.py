@@ -254,7 +254,9 @@ class CoachPostViewSet(viewsets.ModelViewSet):
             elif subscription.tier.tier==Tier.FREE:
                 post_query = post_query.exclude(coach=coach, tier__tier__in=[Tier.TIER2, Tier.TIER1])
         else:
-            post_query = post_query.exclude(coach=coach, tier__tier__in=[Tier.TIER2, Tier.TIER1])
+            # if the user is the coach don't exclude anything
+            if self.request.user != coach.user:
+                post_query = post_query.exclude(coach=coach, tier__tier__in=[Tier.TIER2, Tier.TIER1])
 
         return post_query.distinct()
 
@@ -553,6 +555,10 @@ class NotificationsViewSet(viewsets.ModelViewSet):
     serializer_class = serializers.NotificationSerializer
     permission_classes = [permissions.IsAuthenticated, ]
 
+    def get_queryset(self):
+        user = self.request.user
+        return user.notifications.all()
+
     def get_serializer_context(self):
         return {
             'request': self.request,
@@ -701,9 +707,10 @@ def join_project(request, id):
         if invoice['status'] == 'paid':
             team_found = False
 
-            # First try to find a team with empty spots and add the user there
+            # First try to find a team with empty spots that has not started yet and add the user there
             for team in project.teams.all():
-                if team.members.count() < project.team_size:
+                has_started_progressing = team.milestone_completion_reports.count() > 0
+                if team.members.count() < project.team_size and not has_started_progressing:
                     team_found = True
                     team.members.add(user.subscriber)
 

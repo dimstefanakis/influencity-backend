@@ -137,7 +137,7 @@ class MilestoneCompletionReport(models.Model):
     members = models.ManyToManyField(Subscriber, related_name="milestone_reports")
     message = models.TextField(null=True, blank=True)
     coach_feedback = models.TextField(null=True, blank=True)
-    team = models.ForeignKey(Team, on_delete=models.CASCADE, null=True, blank=True)
+    team = models.ForeignKey(Team, on_delete=models.CASCADE, null=True, blank=True, related_name="milestone_completion_reports")
 
 
 class MilestoneCompletionImage(CommonImage):
@@ -238,7 +238,7 @@ def milestone_completion_report_notification(sender, instance, created, **kwargs
                         'id': notification.id
                     }
                 )
-        else:
+        elif instance.status == MilestoneCompletionReport.REJECTED:
             for sub in instance.members.all():
                 notification_data = notify.send(instance.milestone.project.coach.user, recipient=sub.user, verb='marked your milestone as rejected', action_object=instance)
 

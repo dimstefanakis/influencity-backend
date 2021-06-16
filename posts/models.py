@@ -29,7 +29,7 @@ class Post(models.Model):
     text = models.TextField(blank=True, null=True)
     text_html = models.TextField(blank=True, null=True)
     coach = models.ForeignKey(Coach, on_delete=models.CASCADE, related_name="posts")
-    linked_project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name="posts", null=True, blank=True)
+    linked_project = models.ForeignKey(Project, on_delete=models.SET_NULL, related_name="posts", null=True, blank=True)
     reacts = GenericRelation(React)
     chained_posts = models.ManyToManyField('self', symmetrical=False, null=True, blank=True, related_name="parent_post")
     tiers = ChainedManyToManyField(
