@@ -615,6 +615,108 @@ def coach_me(request):
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+def handle_join_project(project, subscriber, request=None):
+    team_found = False
+
+    # First try to find a team with empty spots that has not started yet and add the user there
+    for team in project.teams.all():
+        has_started_progressing = team.milestone_completion_reports.count() > 0
+        if team.members.count() < project.team_size and not has_started_progressing:
+            team_found = True
+            team.members.add(subscriber)
+
+            # add the user to all available chat rooms for this project
+            chat_rooms = ChatRoom.objects.filter(
+                project=project, team=team)
+            for chat_room in chat_rooms:
+                chat_room.members.add(subscriber)
+
+            # this function might be called from a webhook
+            # if this is the case don't run this
+            if request:
+                return Response({'team': serializers.TeamSerializer(
+                    team,
+                    context={'request': request,
+                            'project': project}).data})
+
+    # If no empty teams are found / or created create a new team only with this member
+    if not team_found:
+        new_team = Team.objects.create(
+            project=project, name=subscriber.name)
+        new_team.members.add(subscriber)
+
+        # create a new chat room for the team
+        chat_room = ChatRoom.objects.create(name=subscriber.name, team=new_team,
+                                            team_type=ChatRoom.TEAM, project=project)
+        chat_room.members.add(subscriber)
+
+        # also create another chat room for the team + the coach
+        chat_room_with_coach = ChatRoom.objects.create(team=new_team, 
+            name=subscriber.name, team_type=ChatRoom.TEAM_WITH_COACH, project=project)
+        chat_room_with_coach.members.add(
+            subscriber, project.coach.user.subscriber)
+        if request:
+            return Response({'team': serializers.TeamSerializer(
+                    new_team,
+                    context={'request': request,
+                            'project': project}).data})
+
+
+@api_view(http_method_names=['POST'])
+@parser_classes([JSONParser])
+@permission_classes((permissions.IsAuthenticated,))
+def project_payment_sheet(request, id):
+    # Remember to check if user is a subscriber of tier 1+ here
+    user = request.user
+    project = Project.objects.filter(surrogate=id)
+    if project.exists():
+        project = project.first()
+        ephemeralKey = stripe.EphemeralKey.create(
+            customer=user.subscriber.customer_id,
+            stripe_version='2020-08-27',
+        )
+
+        subscription = Subscription.objects.filter(subscriber=user.subscriber, tier__coach=project.coach)
+        if not subscription.exists():
+            return Response({'error': 'You need to be at least Tier 1 subsciber or above to join projects'})
+        subscription = subscription.first()
+        if subscription.tier.tier == Tier.FREE:
+            return Response({'error': 'Free tier subscribers cannot join projects'})
+        elif subscription.tier.tier == Tier.TIER1:
+            invoice = None
+            coupon = Coupon.objects.filter(subscriber=request.user.subscriber, coach=project.coach)
+            if coupon.exists():
+                coupon = coupon.first()
+                price = stripe.Price.retrieve(
+                    project.price_id,
+                )
+                if coupon.valid:
+                    # 100% discount is applied here, no need for stripe to do anything
+                    handle_join_project(project, request.user.subscriber, request)
+                    coupon.valid = False
+                    coupon.save()
+                else:
+                    payment_intent = stripe.PaymentIntent.create(
+                        amount=price.unit_amount,
+                        currency="usd",
+                        customer=request.user.subscriber.customer_id,
+                        application_fee_amount=int(price.unit_amount * 0.2),
+                        transfer_data={
+                            "destination": project.coach.stripe_id,
+                        },
+                        metadata={
+                            'type': 'project',
+                            'subscriber': request.user.subscriber.surrogate,
+                            'troosh_status': 'created',
+                            'id': project.surrogate,
+                        }
+                    )
+                return Response({
+                    'paymentIntent': payment_intent.client_secret if payment_intent else None,
+                    'paymentIntentId': payment_intent.id if payment_intent else None,
+                    'ephemeralKey': ephemeralKey.secret if ephemeralKey else None,
+                    'customer': user.subscriber.customer_id
+                })
 
 @api_view(http_method_names=['POST'])
 @parser_classes([JSONParser])
@@ -751,7 +853,7 @@ def join_project(request, id):
 
 def send_notification_on_subscribe(subscriber, tier, subscription):
     channel_layer = channels.layers.get_channel_layer()
-    notification_data = notify.send(subscriber, recipient=tier.coach.user, verb=f'{subscriber.name} Just subscribed on your {tier.label.lower()} tier!', action_object=subscription)
+    notification_data = notify.send(subscriber, recipient=tier.coach.user, verb=f'Just subscribed on your {tier.label.lower()} tier!', action_object=subscription)
 
     notification = notification_data[0][1][0]
     async_to_sync(channel_layer.group_send)(
@@ -762,6 +864,191 @@ def send_notification_on_subscribe(subscriber, tier, subscription):
         }
     )
 
+@api_view(http_method_names=['POST', 'DELETE'])
+@parser_classes([JSONParser])
+@permission_classes((permissions.IsAuthenticated,))
+def create_stripe_subscription(request, id):
+    user = request.user
+    tier = Tier.objects.get(surrogate=id)
+    creation_id = str(uuid.uuid4())
+    ephemeralKey = stripe.EphemeralKey.create(
+        customer=request.user.subscriber.customer_id,
+        stripe_version='2020-08-27',
+    )
+
+    if request.method == 'POST':
+
+        # First check if the user has already subscribed to this coach with another tier
+        # if that is the case delete the existing one and initiate another subscription
+        if Subscription.objects.filter(subscriber=user.subscriber, tier__coach=tier.coach).exists():
+            sub_instance = Subscription.objects.filter(
+                subscriber=user.subscriber, tier__coach=tier.coach).first()
+
+            subscription = stripe.Subscription.retrieve(
+                sub_instance.subscription_id)
+
+            subscription = stripe.Subscription.modify(
+                subscription.id,
+                cancel_at_period_end=False,
+                proration_behavior='create_prorations',
+                items=[{
+                    'id': subscription['items']['data'][0].id,
+                    'price': tier.price_id,
+                }],
+                metadata={
+                    'subscriber': request.user.subscriber.surrogate,
+                    'tier': tier.surrogate,
+                    'creation_id': creation_id,
+                    'troosh_status': 'updated',
+                },
+
+                expand=["latest_invoice.payment_intent"],
+                application_fee_percent=20,
+                transfer_data={
+                    "destination": tier.coach.stripe_id,
+                }           
+            )
+
+            return Response({
+                'subscriptionId': subscription.id,
+                'clientSecret': subscription.latest_invoice.payment_intent.client_secret,
+                'creationId': creation_id
+            })
+
+        # Then check if the user has already subscribed with the existing tier and return the tier
+        # this will be a result of a possible bug so we don't need to do anything just return the existing tier
+        if Subscription.objects.filter(subscriber=user.subscriber, tier=tier).exists():
+            return Response({'tier': tier.surrogate})
+
+        # If neither of the above scenarios happen create a new subscription on both our end
+        # and stripe
+        subscription = stripe.Subscription.create(
+            customer=request.user.subscriber.customer_id,
+            items=[{
+                'price': tier.price_id,
+            }],
+            payment_behavior='default_incomplete',
+            expand=['latest_invoice.payment_intent'],
+            application_fee_percent=20,
+            metadata={
+                'subscriber': request.user.subscriber.surrogate,
+                'tier': tier.surrogate,
+                'creation_id': creation_id,
+                'troosh_status': 'created',
+            },
+            transfer_data={
+                "destination": tier.coach.stripe_id,
+            },
+        )
+
+        return Response({
+            'subscriptionId': subscription.id,
+            'clientSecret': subscription.latest_invoice.payment_intent.client_secret,
+            'paymentIntentId': subscription.latest_invoice.payment_intent.id,
+            'ephemeralKey': ephemeralKey.secret,
+            'customer': request.user.subscriber.customer_id,
+            'creationId': creation_id,
+        })
+
+        # If user is choosing any of the premium subcriptions (only tier 1 for now) create a coupon for a free project on the specific coach
+        # if tier.tier != tier.FREE:
+        #     coupon = None
+        #     # Also create a coupon if it doesn't exist
+        #     if not Coupon.objects.filter(subscriber=user.subscriber, coach=tier.coach).exists():
+        #         coupon = stripe.Coupon.create(
+        #             percent_off=100,
+        #             duration="once",
+        #         )
+
+        #     created_subscription = Subscription.objects.create(subscriber=request.user.subscriber, subscription_id=subscription.id,
+        #                                 customer_id=request.user.subscriber.customer_id, json_data=json.dumps(
+        #                                     subscription),
+        #                                 tier=tier, price_id=tier.price_id)
+            
+        #     if coupon:
+        #         Coupon.objects.create(coach=tier.coach, subscriber=user.subscriber,
+        #         coupon_id=coupon.id, valid=coupon.valid, json_data=json.dumps(coupon))
+            
+        # else:
+        #     created_subscription = Subscription.objects.create(subscriber=request.user.subscriber, subscription_id=subscription.id,
+        #                     customer_id=request.user.subscriber.customer_id, json_data=json.dumps(
+        #                         subscription),
+        #                     tier=tier, price_id=tier.price_id)
+        
+        # Also send coach notification about new subscriber
+        # send_notification_on_subscribe(user.subscriber, tier, created_subscription)
+    return Response({'error': 'Unexpected error occurred'})
+
+@api_view(http_method_names=['POST'])
+@parser_classes([JSONParser])
+@permission_classes((permissions.IsAuthenticated,))
+def cancel_subscription(request, id):
+    user = request.user
+    tier = Tier.objects.get(surrogate=id)
+    subcription = Subscription.objects.filter(subscriber=request.user.subscriber,
+                                                tier=tier).first()
+    subcription.delete()
+
+    # remember to remove user from all his teams with this coach
+    teams = Team.objects.filter(
+        project__coach=tier.coach, members=user.subscriber)
+
+    for team in teams:
+        # remove user from all the relevant chat rooms for this project
+        chat_rooms = ChatRoom.objects.filter(team=team)
+        for chat_room in chat_rooms:
+            chat_room.members.remove(user.subscriber)
+
+        # remove subscriber from team
+        team.members.remove(user.subscriber)
+
+    stripe.Subscription.delete(subcription.subscription_id)
+    return Response({'status': 'Successfully unsubscribed'})
+
+
+@api_view(http_method_names=['POST'])
+@permission_classes((permissions.IsAuthenticated,))
+def preview_subscription_invoice(request, id):
+    ephemeralKey = stripe.EphemeralKey.create(
+        customer=request.user.subscriber.customer_id,
+        stripe_version='2020-08-27',
+    )
+
+    # Retrieve the subscription
+    subscription = stripe.Subscription.retrieve(id)
+
+    # Retrive the Invoice
+    invoice = stripe.Invoice.upcoming(
+        customer=request.user.subscriber.customer_id,
+        subscription=id,
+        subscription_items=[{
+            'id': subscription['items']['data'][0].id,
+        }],
+    )
+    return Response({
+        'payment_intent': invoice.payment_intent.client_secret,
+        'ephemeral_key': ephemeralKey.secret,
+        'customer': request.user.subscriber.costumer_id
+    })
+    #return jsonify(invoice=invoice)
+
+@api_view(http_method_names=['GET'])
+@permission_classes((permissions.IsAuthenticated,))
+def check_payment_intent_status(request, id):
+    # Retrieve the Invoice
+    # invoice = stripe.Invoice.retrieve(id)
+    payment_intent = stripe.PaymentIntent.retrieve(id)
+    return Response({
+        'status': payment_intent.metadata.get('troosh_status')
+    })
+
+@api_view(http_method_names=['GET'])
+@permission_classes((permissions.IsAuthenticated,))
+def check_subscription_status(request, id):
+    subscription = stripe.Subscription.retrieve(id)
+    return Response({
+        'status': subscription.metadata.get('troosh_status')
+    })
 
 @api_view(http_method_names=['POST', 'DELETE'])
 @parser_classes([JSONParser])
@@ -1143,7 +1430,7 @@ def get_stripe_balance(request):
 
 
 @csrf_exempt
-def stripe_webook(request):
+def stripe_webhook(request):
     payload = request.body
     sig_header = request.META['HTTP_STRIPE_SIGNATURE']
     event = None
@@ -1158,6 +1445,75 @@ def stripe_webook(request):
     except stripe.error.SignatureVerificationError as e:
         # Invalid signature
         return HttpResponse(status=400)
+
+    data_object = event.data.object
+    if event.type == 'payment_intent.succeeded':
+        payment_intent_id = data_object['id']
+        payment_intent = stripe.PaymentIntent.modify(
+            payment_intent_id,
+            metadata={
+                'troosh_status': 'completed'
+            }
+        )
+        payment_type = payment_intent.metadata['type']
+        if payment_type == 'project':
+            project_id = payment_intent.metadata['id']
+            subscriber = payment_intent.metadata['subscriber']
+            subscriber = Subscriber.objects.filter(surrogate=subscriber).first()
+            project = Project.objects.filter(surrogate=project_id).first()
+            if project:
+                handle_join_project(project, subscriber)
+
+    if event.type == 'invoice.payment_succeeded':
+        if data_object['billing_reason'] == 'subscription_create' or data_object['billing_reason'] == 'subscription_update':
+            # The subscription automatically activates after successful payment
+            # Set the payment method used to pay the first invoice
+            # as the default payment method for that subscription
+            subscription_id = data_object['subscription']
+            payment_intent_id = data_object['payment_intent']
+
+            # Retrieve the payment intent used to pay the subscription
+            payment_intent = stripe.PaymentIntent.retrieve(payment_intent_id)
+
+            subscription = stripe.Subscription.retrieve(subscription_id)
+            sub_instance = Subscription.objects.filter(subscription_id=subscription_id)
+            subscriber = subscription.metadata['subscriber']
+            tier = subscription.metadata['tier']
+            subscriber = Subscriber.objects.filter(surrogate=subscriber).first()
+            tier = Tier.objects.filter(surrogate=tier).first()
+
+            if not sub_instance.exists():
+                coupon = None
+                created_subscription = Subscription.objects.create(subscriber=subscriber, subscription_id=subscription.id,
+                                        customer_id=subscriber.customer_id, json_data=json.dumps(subscription),
+                                        tier=tier, price_id=tier.price_id)
+                if not Coupon.objects.filter(subscriber=subscriber, coach=tier.coach).exists():
+                    coupon = stripe.Coupon.create(
+                        percent_off=100,
+                        duration="once",
+                    )
+                if coupon:
+                    Coupon.objects.create(coach=tier.coach, subscriber=subscriber,
+                    coupon_id=coupon.id, valid=coupon.valid, json_data=json.dumps(coupon))
+
+            else:
+                created_subscription = Subscription.objects.create(subscriber=subscriber, subscription_id=subscription.id,
+                customer_id=subscriber.customer_id, json_data=json.dumps(
+                    subscription),
+                tier=tier, price_id=tier.price_id)
+
+            # Update the status of the subscription
+            # Set the default payment method
+            subscription = stripe.Subscription.modify(
+                subscription_id,
+                default_payment_method=payment_intent.payment_method,
+                metadata={
+                    'troosh_status': 'completed'
+                }
+            )
+
+            send_notification_on_subscribe(subscriber, tier, created_subscription)
+
 
     if event.type == 'payment_method.attached':
         payment_method = event.data.object  # contains a stripe.PaymentMethod
