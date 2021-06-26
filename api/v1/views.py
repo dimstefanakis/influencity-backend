@@ -684,6 +684,7 @@ def project_payment_sheet(request, id):
             return Response({'error': 'Free tier subscribers cannot join projects'})
         elif subscription.tier.tier == Tier.TIER1:
             invoice = None
+            payment_intent = None
             coupon = Coupon.objects.filter(subscriber=request.user.subscriber, coach=project.coach)
             if coupon.exists():
                 coupon = coupon.first()
@@ -1455,7 +1456,7 @@ def stripe_webhook(request):
                 'troosh_status': 'completed'
             }
         )
-        payment_type = payment_intent.metadata['type']
+        payment_type = payment_intent.get('type')
         if payment_type == 'project':
             project_id = payment_intent.metadata['id']
             subscriber = payment_intent.metadata['subscriber']
