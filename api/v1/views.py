@@ -94,6 +94,7 @@ class UserMeViewSet(mixins.ListModelMixin,
     serializer_class = serializers.UserMeSerializer
     permission_classes = [permissions.IsAuthenticated, ]
 
+    # TODO FIX MEEEEE
     def get_serializer_class(self):
         # UserMeNoCoachSerializer
         user = self.get_queryset()
@@ -103,7 +104,10 @@ class UserMeViewSet(mixins.ListModelMixin,
         return serializers.UserMeNoCoachSerializer
 
     def get_queryset(self):
-        return User.objects.filter(pk=self.request.user.pk)
+        if not self.request.user:
+            return HttpResponse(status=401)
+        queryset = User.objects.filter(pk=self.request.user.pk)
+        return queryset
 
     def get_serializer_context(self):
         return {
@@ -1524,7 +1528,7 @@ def stripe_webhook(request):
             # Set the default payment method
             subscription = stripe.Subscription.modify(
                 subscription_id,
-                default_payment_method=payment_intent.payment_method,
+                #default_payment_method=payment_intent.payment_method,
                 metadata={
                     'troosh_status': 'completed'
                 }
