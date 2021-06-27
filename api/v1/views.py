@@ -1458,11 +1458,8 @@ def stripe_webhook(request):
     data_object = event.data.object
     if event.type == 'payment_intent.succeeded':
         payment_intent_id = data_object['id']
-        payment_intent = stripe.PaymentIntent.modify(
+        payment_intent = stripe.PaymentIntent.retrieve(
             payment_intent_id,
-            metadata={
-                'troosh_status': 'completed'
-            }
         )
         payment_type = payment_intent.get('type')
         if payment_type == 'project':
@@ -1472,6 +1469,14 @@ def stripe_webhook(request):
             project = Project.objects.filter(surrogate=project_id).first()
             if project:
                 handle_join_project(project, subscriber)
+                stripe.PaymentIntent.modify(
+                    payment_intent_id,
+                    metadata={
+                        'troosh_status': 'completed'
+                    }
+                )
+                return Response({'success': 'Successfully joined project'})
+        return Response({'error': 'Unexpected error occured'})
 
     if event.type == 'invoice.payment_succeeded':
         if data_object['billing_reason'] == 'subscription_create' or data_object['billing_reason'] == 'subscription_update':
