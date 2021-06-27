@@ -1478,7 +1478,7 @@ def stripe_webhook(request):
                     }
                 )
                 return Response({'success': 'Successfully joined project'})
-        return Response({'error': 'Unexpected error occured'})
+        return Response({'error': json.dumps(payment_intent)})
 
     if event.type == 'invoice.payment_succeeded':
         if data_object['billing_reason'] == 'subscription_create' or data_object['billing_reason'] == 'subscription_update':
