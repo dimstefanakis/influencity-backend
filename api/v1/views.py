@@ -1436,6 +1436,9 @@ def stripe_webhook(request):
     sig_header = request.META['HTTP_STRIPE_SIGNATURE']
     event = None
 
+    # endpoints received from "account" and "connect applications" both land here
+    # so we have to check both signatured
+    # if one fails try the other
     try:
         event = stripe.Webhook.construct_event(
             payload, sig_header, os.environ.get('STRIPE_ENDPOINT_SECRET')
@@ -1444,8 +1447,13 @@ def stripe_webhook(request):
         # Invalid payload
         return HttpResponse(status=400)
     except stripe.error.SignatureVerificationError as e:
-        # Invalid signature
-        return HttpResponse(status=400)
+        try:
+            event = stripe.Webhook.construct_event(
+                payload, sig_header, os.environ.get('STRIPE_ENDPOINT_REGULAR_SECRET')
+            )
+        except stripe.error.SignatureVerificationError as e2:
+            # Invalid signature
+            return HttpResponse(status=400)
 
     data_object = event.data.object
     if event.type == 'payment_intent.succeeded':
@@ -1519,9 +1527,8 @@ def stripe_webhook(request):
     if event.type == 'payment_method.attached':
         payment_method = event.data.object  # contains a stripe.PaymentMethod
     elif event.type == 'account.updated':
-        account = event.data.object
-        charges_enabled = account.get('charges_enabled', '')
-        coach = Coach.objects.get(stripe_id=account.get('id', ''))
+        charges_enabled = data_object.get('charges_enabled', '')
+        coach = Coach.objects.get(stripe_id=data_object.get('id', ''))
 
         coach.charges_enabled = charges_enabled
         coach.save()
