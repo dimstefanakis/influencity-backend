@@ -1463,7 +1463,7 @@ def stripe_webhook(request):
         payment_intent = stripe.PaymentIntent.retrieve(
             payment_intent_id,
         )
-        payment_type = payment_intent.get('type')
+        payment_type = payment_intent.metadata.get('type')
         if payment_type == 'project':
             project_id = payment_intent.metadata['id']
             subscriber = payment_intent.metadata['subscriber']
@@ -1478,6 +1478,8 @@ def stripe_webhook(request):
                     }
                 )
                 return Response({'success': 'Successfully joined project'})
+            else:
+                return Response({'error': f"Project with id {project_id} not found"})
         return Response({'error': json.dumps(payment_intent)})
 
     if event.type == 'invoice.payment_succeeded':
