@@ -1431,6 +1431,8 @@ def get_stripe_balance(request):
 
 
 @csrf_exempt
+@api_view(http_method_names=['POST'])
+@permission_classes((permissions.AllowAny,))
 def stripe_webhook(request):
     payload = request.body
     sig_header = request.META['HTTP_STRIPE_SIGNATURE']
