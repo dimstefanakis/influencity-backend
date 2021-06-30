@@ -909,6 +909,7 @@ def create_stripe_subscription(request, id):
                         'price': tier.price_id,
                     }],
                     payment_behavior='default_incomplete',
+                    default_source=None,
                     expand=['latest_invoice.payment_intent'],
                     application_fee_percent=20,
                     metadata={
@@ -983,6 +984,7 @@ def create_stripe_subscription(request, id):
                     'price': tier.price_id,
                 }],
                 payment_behavior='default_incomplete',
+                default_source=None,
                 expand=['latest_invoice.payment_intent'],
                 application_fee_percent=20,
                 metadata={
@@ -1085,9 +1087,21 @@ def preview_subscription_invoice(request, id):
     return Response({
         'payment_intent': invoice.payment_intent.client_secret,
         'ephemeral_key': ephemeralKey.secret,
-        'customer': request.user.subscriber.costumer_id
+        'customer': request.user.subscriber.customer_id
     })
     #return jsonify(invoice=invoice)
+
+@api_view(http_method_names=['GET'])
+@parser_classes([JSONParser])
+@permission_classes((permissions.IsAuthenticated,))
+def card_wallet(request):
+    setup_intent = stripe.SetupIntent.create(
+        customer=request.user.subscriber.customer_id
+    )
+    client_secret = setup_intent.client_secret
+    return Response({
+        'clientSecret': client_secret,
+    })
 
 @api_view(http_method_names=['GET'])
 @permission_classes((permissions.IsAuthenticated,))
