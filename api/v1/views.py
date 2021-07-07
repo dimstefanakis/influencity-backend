@@ -358,7 +358,7 @@ class MyCreatedProjectsViewSet(viewsets.ModelViewSet):
         }
 
     def get_queryset(self):
-        if self.request.user.coach:
+        if self.request.user.is_coach:
             return self.request.user.coach.created_projects.all()
         else:
             return Project.objects.none()
@@ -919,8 +919,8 @@ def create_stripe_subscription(request, id):
                         'troosh_status': 'created',
                     },
                     transfer_data={
-                            "destination": tier.coach.stripe_id,
-                        },
+                        "destination": tier.coach.stripe_id,
+                    },
                 )
                 # update the subscription on our end as well
                 # sub_instance.subscription_id = subscription.id
@@ -1528,6 +1528,15 @@ def stripe_webhook(request):
             return HttpResponse(status=400)
 
     data_object = event.data.object
+    if event.type == 'payment_intent.payment_failed':
+        payment_intent_id = data_object['id']
+        stripe.PaymentIntent.modify(
+            payment_intent_id,
+            metadata={
+                'troosh_status': 'payment_failed'
+            }
+        )            
+
     if event.type == 'payment_intent.succeeded':
         payment_intent_id = data_object['id']
         payment_intent = stripe.PaymentIntent.retrieve(
@@ -1551,6 +1560,22 @@ def stripe_webhook(request):
             else:
                 return Response({'error': f"Project with id {project_id} not found"})
         return Response({'error': json.dumps(payment_intent)})
+
+    if event.type == 'invoice.payment_failed':
+        if data_object['billing_reason'] == 'subscription_create' or data_object['billing_reason'] == 'subscription_update':
+            subscription_id = data_object['subscription']
+            payment_intent_id = data_object['payment_intent']
+
+            # Retrieve the payment intent used to pay the subscription
+            payment_intent = stripe.PaymentIntent.retrieve(payment_intent_id)
+
+            subscription = stripe.Subscription.modify(
+                subscription_id,
+                #default_payment_method=payment_intent.payment_method,
+                metadata={
+                    'troosh_status': 'payment_failed'
+                }
+            )
 
     if event.type == 'invoice.payment_succeeded':
         if data_object['billing_reason'] == 'subscription_create' or data_object['billing_reason'] == 'subscription_update':
