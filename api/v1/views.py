@@ -38,6 +38,13 @@ import os
 stripe.api_key = os.environ.get('STRIPE_SECRET_KEY')
 
 
+class IsCoach(permissions.BasePermission):
+    message = "User must be a mentor"
+
+    def has_permission(self, request, view):
+        return request.user.is_coach
+        
+
 class CursorPaginationWithCount(CursorPagination):
     def paginate_queryset(self, queryset, request, view=None):
         self.count = self.get_count(queryset)
@@ -215,15 +222,18 @@ class MyCouponsViewSet(viewsets.ModelViewSet):
         }
 
 
-class PostViewSet(viewsets.ModelViewSet):
-    permission_classes = [permissions.IsAuthenticated, ]
+class PostViewSet(viewsets.GenericViewSet,
+                mixins.CreateModelMixin):
+    permission_classes = [permissions.IsAuthenticated, IsCoach]
+    # permission_classes_by_action = {'create': [permissions.IsAuthenticated, IsCoach],
+    #                                 'list': [permissions.IsAuthenticated]}
+
     queryset = Post.objects.all()
     serializer_class = serializers.PostSerializer
     lookup_field = 'surrogate'
 
     def get_serializer_class(self):
         if self.action == 'create':
-            print(self.request.data)
             return serializers.PostCreateSerializer
         return serializers.PostSerializer
 

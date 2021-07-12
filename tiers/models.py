@@ -139,7 +139,6 @@ class Benefit(models.Model):
 def tier_updated(sender, instance, *args, **kwargs):
     # create stripe Product
     if not instance.product_id:
-        print(instance.credit)
         product = stripe.Product.create(name="%s - %s" % (instance.coach.name, instance.label))
         instance.product_id = product.id
     else:

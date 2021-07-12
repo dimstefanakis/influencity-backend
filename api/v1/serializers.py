@@ -700,6 +700,12 @@ class PostCreateSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         coach = self.context['request'].user.coach
 
+        if not validated_data.get('tier'):
+            raise serializers.ValidationError({'error': 'A tier is required'})
+        
+        if not validated_data.get('text') and not validated_data.get('images') and not validated_data.get('has_videos'):
+            raise serializers.ValidationError({'error': 'Post contains no data'})
+        
         try:
             images = validated_data.pop('images')
         except KeyError:
