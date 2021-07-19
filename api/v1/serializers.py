@@ -213,11 +213,24 @@ class UserMeSerializer(serializers.ModelSerializer):
 
 class UserMeNoCoachSerializer(serializers.ModelSerializer):
     subscriber = SubscriberSerializer()
+    is_coach_application_pending = serializers.SerializerMethodField()
+
+    def get_is_coach_application_pending(self, user):
+        try:
+            applications = CoachApplication.objects.filter(subscriber=user.subscriber)
+            if applications.exists():
+                latest_application = CoachApplication.objects.order_by('-created')[0]
+                if latest_application.status == CoachApplication.PENDING:
+                    return True
+            return False
+        except Exception as e:
+            print("UserMeNoCoachSerializer error", e)
+            return False
 
     class Meta:
         model = User
         fields = ['username', 'email', 'is_coach',
-                  'is_subscriber', 'subscriber']
+                  'is_subscriber', 'is_coach_application_pending', 'subscriber']
 
 
 class PrerequisiteSerializer(serializers.ModelSerializer):

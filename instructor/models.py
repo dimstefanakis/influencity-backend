@@ -50,6 +50,8 @@ class CoachApplication(models.Model):
         (APPROVED, 'Approved'),
         (REJECTED, 'Rejected')
     ]
+    created = models.DateTimeField(auto_now_add=True, null=True, blank=True)
+    updated = models.DateTimeField(auto_now=True)
     surrogate = models.UUIDField(default=uuid4, db_index=True)
     subscriber = models.ForeignKey(Subscriber, on_delete=models.CASCADE, related_name="applications")
     message = models.TextField(null=False, blank=False)
