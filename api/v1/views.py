@@ -96,6 +96,32 @@ class UserViewSet(viewsets.ModelViewSet):
             'request': self.request,
         }
 
+def send_notification_on_subscribe(subscriber, tier, subscription):
+    channel_layer = channels.layers.get_channel_layer()
+    notification_data = notify.send(subscriber, recipient=tier.coach.user, verb=f'Just subscribed on your {tier.label.lower()} tier!', action_object=subscription)
+
+    notification = notification_data[0][1][0]
+    async_to_sync(channel_layer.group_send)(
+        f"{str(tier.coach.user.surrogate)}.notifications.group",
+        {
+            'type': 'send.notification',
+            'id': notification.id
+        }
+    )
+
+def send_notification_on_project_join(subscriber, project):
+    channel_layer = channels.layers.get_channel_layer()
+    notification_data = notify.send(subscriber, recipient=project.coach.user, verb=f'Just joined your project', action_object=project)
+
+    notification = notification_data[0][1][0]
+    async_to_sync(channel_layer.group_send)(
+        f"{str(project.coach.user.surrogate)}.notifications.group",
+        {
+            'type': 'send.notification',
+            'id': notification.id
+        }
+    )
+
 class UserMeViewSet(mixins.ListModelMixin,
                     viewsets.GenericViewSet):
     serializer_class = serializers.UserMeSerializer
@@ -674,6 +700,7 @@ def handle_join_project(project, subscriber, request=None):
                     new_team,
                     context={'request': request,
                             'project': project}).data})
+    send_notification_on_project_join(subscriber, project)
 
 
 @api_view(http_method_names=['POST'])
@@ -865,19 +892,6 @@ def join_project(request, id):
                             'project': project}).data})
         return Response({'error': 'An error occured during your purchase'})
 
-
-def send_notification_on_subscribe(subscriber, tier, subscription):
-    channel_layer = channels.layers.get_channel_layer()
-    notification_data = notify.send(subscriber, recipient=tier.coach.user, verb=f'Just subscribed on your {tier.label.lower()} tier!', action_object=subscription)
-
-    notification = notification_data[0][1][0]
-    async_to_sync(channel_layer.group_send)(
-        f"{str(tier.coach.user.surrogate)}.notifications.group",
-        {
-            'type': 'send.notification',
-            'id': notification.id
-        }
-    )
 
 @api_view(http_method_names=['POST', 'DELETE'])
 @parser_classes([JSONParser])

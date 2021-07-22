@@ -37,7 +37,7 @@ DEBUG = os.environ.get("DEBUG", "False") == "True"
 DEVELOPMENT_MODE = os.environ.get("DEVELOPMENT_MODE", "False") == "True"
 ACCOUNT_EMAIL_VERIFICATION = 'none'
 
-ALLOWED_HOSTS = os.environ.get("DJANGO_ALLOWED_HOSTS", "127.0.0.1,localhost,192.168.2.4,20a555a15e3e.ngrok.io").split(",")
+ALLOWED_HOSTS = os.environ.get("DJANGO_ALLOWED_HOSTS", "127.0.0.1,localhost,192.168.1.10,20a555a15e3e.ngrok.io").split(",")
 # EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'

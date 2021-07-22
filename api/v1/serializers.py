@@ -266,18 +266,6 @@ class MilestoneCompletionVideoSerializer(serializers.ModelSerializer):
         fields = ['asset_id', 'playback_ids']
 
 
-class MilestoneSerializer(serializers.ModelSerializer):
-    id = serializers.SerializerMethodField()
-
-    def get_id(self, milestone):
-        return milestone.surrogate
-
-    class Meta:
-        model = Milestone
-        fields = ['description', 'id']
-        read_only_fields = ['id']
-
-
 class CreateMilestoneCompletionReportSerializer(serializers.ModelSerializer):
     members = serializers.ListField(
         child=serializers.UUIDField(), write_only=True)
@@ -365,6 +353,18 @@ class CouponSerializer(serializers.ModelSerializer):
         model = Coupon
         fields = ['surrogate', 'coupon_id', 'valid', 'json_data']
         read_only_fields = fields
+
+
+class MilestoneSerializer(serializers.ModelSerializer):
+    id = serializers.SerializerMethodField()
+
+    def get_id(self, milestone):
+        return milestone.surrogate
+
+    class Meta:
+        model = Milestone
+        fields = ['description', 'id']
+        read_only_fields = ['id']
 
 
 class ProjectSerializer(serializers.ModelSerializer):
@@ -1110,13 +1110,43 @@ class TeamSerializer(serializers.ModelSerializer):
                 status = 'pending'
 
             _milestones.append({'description': milestone.description, 'completed': completed,
-                                'status': status, 'id': milestone.id,
+                                'status': status, 'id': milestone.id, 'surrogate': milestone.surrogate,
                                 'reports': MilestoneCompletionReportSerializer(reports, many=True).data})
         return _milestones
 
     class Meta:
         model = Team
         fields = ['surrogate','name', 'avatar', 'project', 'members', 'milestones', 'team_tier']
+
+
+class MilestoneCompletionReportExtendedSerializer(serializers.ModelSerializer):
+    members = SubscriberSerializer(many=True, required=False)
+    images = MilestoneCompletionImageSerializer(many=True, required=False)
+    videos = MilestoneCompletionVideoSerializer(many=True, required=False)
+    milestone = MilestoneSerializer()
+    project = serializers.SerializerMethodField()
+    team = serializers.SerializerMethodField()
+    reports = serializers.SerializerMethodField()
+
+    def get_project(self, milestone_completion_report):
+        return MyProjectsSerializer(milestone_completion_report.milestone.project, context=self.context).data
+
+    def get_team(self, milestone_completion_report):
+        context = {
+            **self.context,
+            'project': milestone_completion_report.team.project,
+        }
+        return TeamSerializer(milestone_completion_report.team, context=context).data
+
+    def get_reports(self, milestone_completion_report):
+        reports = milestone_completion_report.milestone.reports.filter(team=milestone_completion_report.team)
+        return MilestoneCompletionReportSerializer(reports, many=True).data
+
+    class Meta:
+        model = MilestoneCompletionReport
+        fields = ['members', 'message', 'milestone', 'project', 'team', 'reports', 'coach_feedback', 'status',
+                  'images', 'videos', 'surrogate']
+        read_only_fields = fields
 
 
 class ExpertiseAvatarSerializer(serializers.ModelSerializer):
@@ -1409,11 +1439,13 @@ class GenericNotificationRelatedField(serializers.RelatedField):
         if isinstance(value, ChatRoom):
             serializers = ChatRoomSerializer(value, context=context)
         if isinstance(value, MilestoneCompletionReport):
-            serializers = MilestoneCompletionReportSerializer(value, context=context)
+            serializers = MilestoneCompletionReportExtendedSerializer(value, context=context)
         if isinstance(value, Milestone):
             serializers = MilestoneSerializer(value, context=context)
         if isinstance(value, User):
             serializers = SubscriberSerializer(value.subscriber, context=context)
+        if isinstance(value, Project):
+            serializers = ProjectSerializer(value, context=context)
         try:
             return serializers.data
         except Exception as e:
