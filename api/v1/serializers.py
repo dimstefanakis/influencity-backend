@@ -1,3 +1,4 @@
+from operator import le
 from django.db.models import Q
 from django.db.models import Count
 from djmoney.money import Money
@@ -450,6 +451,15 @@ class CreateOrUpdateProjectSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         coach = self.context['request'].user.coach
 
+        if not validated_data.get('name'):
+            raise serializers.ValidationError({'error': 'A name is required'})
+
+        if not validated_data.get('description'):
+            raise serializers.ValidationError({'error': 'A description is required'})
+
+        if not validated_data.get('difficulty'):
+            raise serializers.ValidationError({'error': 'A difficulty is required'})
+
         try:
             prerequisites = validated_data.pop('prerequisites')
         except KeyError:
@@ -458,7 +468,24 @@ class CreateOrUpdateProjectSerializer(serializers.ModelSerializer):
         try:
             milestones = validated_data.pop('milestones')
         except KeyError:
-            milestones = []
+            raise serializers.ValidationError({'error': 'At least one milestone is required'})
+            #milestones = []
+
+        if len(milestones) == 0:
+            raise serializers.ValidationError({'error': 'At least one milestone is required'})
+
+        # do this once before creating the project
+        for milestone in milestones:
+            try:
+                if not isinstance(milestone, dict):
+                    milestone = json.loads(milestone)
+            # helps pass tests
+            except json.decoder.JSONDecodeError:
+                import ast
+                milestone = ast.literal_eval(milestone)
+
+            if not milestone.get('description'):
+                raise serializers.ValidationError({'error': 'One or more milestones are missing the "description" field'})
 
         try:
             attached_posts = validated_data.pop('attached_posts')
@@ -481,7 +508,14 @@ class CreateOrUpdateProjectSerializer(serializers.ModelSerializer):
                     description=prerequisite, project=project)
 
         for milestone in milestones:
-            milestone = json.loads(milestone)
+            try:
+                if not isinstance(milestone, dict):
+                    milestone = json.loads(milestone)
+            # helps pass tests
+            except json.decoder.JSONDecodeError:
+                import ast
+                milestone = ast.literal_eval(milestone)
+            # validation has been done beforehand
             Milestone.objects.create(
                 description=milestone['description'], project=project)
 
@@ -517,7 +551,6 @@ class CreateOrUpdateProjectSerializer(serializers.ModelSerializer):
         except Exception as e:
             pass
 
-
         try:
             difficulty = validated_data.pop('difficulty')
             instance.difficulty = difficulty
@@ -526,10 +559,20 @@ class CreateOrUpdateProjectSerializer(serializers.ModelSerializer):
         instance.credit = credit
 
         for milestone in milestones:
-            milestone = json.loads(milestone)
+            try:
+                if not isinstance(milestone, dict):
+                    milestone = json.loads(milestone)
+            # helps pass tests
+            except json.decoder.JSONDecodeError:
+                import ast
+                milestone = ast.literal_eval(milestone)
+
+            if not milestone.get('description'):
+                raise serializers.ValidationError({'error': 'One or more milestones are missing the "description" field'})
+
             # try:
             milestone_instance = Milestone.objects.filter(
-                surrogate=milestone['id'])
+                surrogate=milestone.get('id'))
             if milestone_instance.exists():
                 milestone_instance = milestone_instance.first()
                 milestone_instance.description = milestone['description']

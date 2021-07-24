@@ -346,7 +346,7 @@ class ChainPostsViewSet(generics.CreateAPIView, viewsets.GenericViewSet):
 
 class ProjectsViewSet(viewsets.ModelViewSet):
     queryset = Project.objects.all()
-    permission_classes = [permissions.IsAuthenticated, ]
+    #permission_classes = [permissions.IsAuthenticated, ]
     lookup_field = 'surrogate'
 
     def get_serializer_class(self):
@@ -358,15 +358,13 @@ class ProjectsViewSet(viewsets.ModelViewSet):
         return {
             'request': self.request,
         }
-    # def get_permissions(self):
-    #     """
-    #     Instantiates and returns the list of permissions that this view requires.
-    #     """
-    #     if self.action == 'create':
-    #         permission_classes = [permissions.IsAuthenticated]
-    #     else:
-    #         permission_classes = [permissions.IsAuthenticated]
-    #     return [permission() for permission in permission_classes]
+
+    def get_permissions(self):
+        if self.action == 'create' or self.action == 'update' or self.action == 'partial_update':
+            permission_classes = [permissions.IsAuthenticated, IsCoach]
+        else:
+            permission_classes = [permissions.IsAuthenticated]
+        return [permission() for permission in permission_classes]
 
 
 class MyProjectsViewSet(viewsets.ModelViewSet):
