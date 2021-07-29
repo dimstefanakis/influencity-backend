@@ -43,7 +43,34 @@ class IsCoach(permissions.BasePermission):
 
     def has_permission(self, request, view):
         return request.user.is_coach
-        
+
+
+class IsSubscribedToPostTier(permissions.BasePermission):
+    message = "User must be subscribed to specific tier"
+
+    def has_permission(self, request, view):
+        _id = request.data['post']
+        post = Post.objects.filter(surrogate=_id)
+        if not post.exists():
+            return False
+        post = post.first()
+        post_tier = post.tier
+        # check if user is the coach that created the post
+        if request.user.is_coach:
+            if request.user.coach == post_tier.coach:
+                return True
+        # else check if the user has subscribed to the tier this post belongs to
+        return request.user.subscriber.subscriptions.filter(tier=post_tier).exists()
+
+    def has_object_permission(self, request, view, obj):
+        post_tier = obj.tier
+        # check if user is the coach that created the post
+        if request.user.is_coach:
+            if request.user.coach == post_tier.coach:
+                return True
+        # else check if the user has subscribed to the tier this post belongs to
+        return request.user.subscriber.subscriptions.filter(tier=post_tier).exists()
+
 
 class CursorPaginationWithCount(CursorPagination):
     def paginate_queryset(self, queryset, request, view=None):
@@ -249,8 +276,9 @@ class MyCouponsViewSet(viewsets.ModelViewSet):
 
 
 class PostViewSet(viewsets.GenericViewSet,
+                mixins.RetrieveModelMixin,
                 mixins.CreateModelMixin):
-    permission_classes = [permissions.IsAuthenticated, IsCoach]
+    permission_classes = [permissions.IsAuthenticated, IsCoach] # IsSubscribedToPostTier
     # permission_classes_by_action = {'create': [permissions.IsAuthenticated, IsCoach],
     #                                 'list': [permissions.IsAuthenticated]}
 
@@ -479,7 +507,7 @@ class CreateCommentViewSet(viewsets.GenericViewSet, mixins.CreateModelMixin):
     serializer_class = serializers.CreateCommentSerializer
     pagination_class = CommentPagination
     queryset = Comment.objects.all()
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly,]
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly, IsSubscribedToPostTier]
 
     def get_serializer_context(self):
         return {

@@ -763,6 +763,15 @@ class PostCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({'error': 'Post contains no data'})
         
         try:
+            tier = validated_data.get('tier')
+
+            # check if this tier belongs to the current user
+            if tier.coach.pk != coach.pk:
+                raise serializers.ValidationError({'error': 'Invalid tier'})
+        except Exception as e:
+            raise serializers.ValidationError({'error': 'Invalid tier'})
+
+        try:
             images = validated_data.pop('images')
         except KeyError:
             images = []
