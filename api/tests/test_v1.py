@@ -89,6 +89,14 @@ def get_mentor_2_tokens(client):
         'refresh': data['refresh']
     }
 
+def create_bulk_posts(posts):
+    created_posts = Post.objects.none()
+    for post in posts:
+        created_post = Post.objects.create(**post)
+        created_post = Post.objects.filter(pk=created_post.pk)
+        created_posts |= created_post
+    return created_posts
+
 class AuthenticationTestCase(TestCase):
 
     def setUp(self):
@@ -661,6 +669,16 @@ class CommentTestCase(TestCase):
         response = self.c_auth.post('/api/v1/comments/create/', data=body)
         self.assertEqual(response.status_code, 403)
 
+    def test_comment_as_subscriber_with_being_subscribed_to_the_wrong_tier_return_403(self):
+        post = Post.objects.get(surrogate=self.post['id'])
+        subscription = Subscription.objects.create(subscriber=self.user, tier=post.coach.tiers.last(), customer_id=self.user.customer_id)
+        body = {
+            'post': self.post['id'],
+            'text': 'test text',
+        }
+        response = self.c_auth.post('/api/v1/comments/create/', data=body)
+        self.assertEqual(response.status_code, 403)
+
     def test_comment_as_mentor_to_own_post_should_return_201(self):
         body = {
             'post': self.post['id'],
@@ -678,4 +696,28 @@ class CommentTestCase(TestCase):
         }
         response = self.c_auth.post('/api/v1/comments/create/', data=body)
         self.assertEqual(response.status_code, 201)
+
+class FeedTestCase(TestCase):
+    def setUp(self):
+        self.c = Client()
+        self.user = create_user(self.c)
+        self.mentor = create_mentor(self.c)
+        self.mentor_2 = create_mentor_2(self.c)
+        tokens = get_tokens(self.c)
+        mentor_tokens = get_mentor_tokens(self.c)
+        mentor_2_tokens = get_mentor_2_tokens(self.c)
+        self.c_auth = Client(HTTP_AUTHORIZATION=f"Bearer {tokens['access']}")
+        self.c_mentor_auth = Client(HTTP_AUTHORIZATION=f"Bearer {mentor_tokens['access']}")
+        self.c_mentor_2_auth = Client(HTTP_AUTHORIZATION=f"Bearer {mentor_2_tokens['access']}")
+        # create a bulk of posts with incrementing text to simulate a feed
+        self.mentor_tier_1_post_data = [{'text': f"text {i}", 'coach':self.mentor.user.coach, 'tier': self.mentor.user.coach.tiers.first()} for i in range(10)]
+        self.mentor_tier_2_post_data_2 = [{'text': f"text {i}", 'coach':self.mentor.user.coach ,'tier': self.mentor_2.user.coach.tiers.first()} for i in range(20)]
+        self.mentor_tier_1_post_data = create_bulk_posts(self.mentor_tier_1_post_data)
+        self.mentor_tier_2_post_data_2 = create_bulk_posts(self.mentor_tier_2_post_data_2)
+
+    def test_get_subscriber_feed_should_return_correct_list(self):
+        Subscription.objects.create(subscriber=self.user, tier=self.mentor.user.coach.tiers.first(), customer_id=self.user.customer_id)
+        Subscription.objects.create(subscriber=self.user, tier=self.mentor_2.user.coach.tiers.first(), customer_id=self.user.customer_id)
+        response = self.c_auth.get('/api/v1/new_posts/')
+        self.assertEqual(response.status_code, 200)
 
