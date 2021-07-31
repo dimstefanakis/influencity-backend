@@ -710,14 +710,52 @@ class FeedTestCase(TestCase):
         self.c_mentor_auth = Client(HTTP_AUTHORIZATION=f"Bearer {mentor_tokens['access']}")
         self.c_mentor_2_auth = Client(HTTP_AUTHORIZATION=f"Bearer {mentor_2_tokens['access']}")
         # create a bulk of posts with incrementing text to simulate a feed
-        self.mentor_tier_1_post_data = [{'text': f"text {i}", 'coach':self.mentor.user.coach, 'tier': self.mentor.user.coach.tiers.first()} for i in range(10)]
-        self.mentor_tier_2_post_data_2 = [{'text': f"text {i}", 'coach':self.mentor.user.coach ,'tier': self.mentor_2.user.coach.tiers.first()} for i in range(20)]
-        self.mentor_tier_1_post_data = create_bulk_posts(self.mentor_tier_1_post_data)
-        self.mentor_tier_2_post_data_2 = create_bulk_posts(self.mentor_tier_2_post_data_2)
 
+        # create 10 posts on tier 1 and 20 for tier 2 on coach no1
+        self.mentor_tier_1_post_data = [{'text': f"text {i}", 'coach':self.mentor.user.coach, 'tier': self.mentor.user.coach.tiers.first()} for i in range(10)]
+        self.mentor_tier_2_post_data = [{'text': f"text {i}", 'coach':self.mentor.user.coach ,'tier': self.mentor.user.coach.tiers.last()} for i in range(20)]
+        self.mentor_tier_1_post_data = create_bulk_posts(self.mentor_tier_1_post_data)
+        self.mentor_tier_2_post_data = create_bulk_posts(self.mentor_tier_2_post_data)
+        
+        # create 10 posts on tier 1 and 20 for tier 2 on coach no2
+        self.mentor_2_tier_1_post_data = [{'text': f"text {i}", 'coach':self.mentor_2.user.coach, 'tier': self.mentor_2.user.coach.tiers.first()} for i in range(10)]
+        self.mentor_2_tier_2_post_data = [{'text': f"text {i}", 'coach':self.mentor_2.user.coach ,'tier': self.mentor_2.user.coach.tiers.last()} for i in range(20)]
+        self.mentor_2_tier_1_post_data = create_bulk_posts(self.mentor_2_tier_1_post_data)
+        self.mentor_2_tier_2_post_data = create_bulk_posts(self.mentor_2_tier_2_post_data)
+
+    # TODO add test where user cannot subscribe to two tiers of the same mentor at once
     def test_get_subscriber_feed_should_return_correct_list(self):
+        # subscribe to tier 1 of mentor no1
+        # subscribe to tier 1 of mentor no2
         Subscription.objects.create(subscriber=self.user, tier=self.mentor.user.coach.tiers.first(), customer_id=self.user.customer_id)
         Subscription.objects.create(subscriber=self.user, tier=self.mentor_2.user.coach.tiers.first(), customer_id=self.user.customer_id)
         response = self.c_auth.get('/api/v1/new_posts/')
         self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn('count', data)
+        self.assertEqual(data['count'], self.mentor_tier_1_post_data.count() + self.mentor_2_tier_1_post_data.count())
 
+    def test_get_subscriber_feed_when_being_mentor_should_return_correct_list_as_well_as_his_own_posts(self):
+        # subscribe to tier 1 of mentor no1
+        Subscription.objects.create(subscriber=self.mentor, tier=self.mentor_2.user.coach.tiers.first(), customer_id=self.mentor.customer_id)
+        response = self.c_mentor_auth.get('/api/v1/new_posts/')
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn('count', data)
+        self.assertEqual(data['count'], self.mentor_2_tier_1_post_data.count() + self.mentor.user.coach.posts.count())
+
+    def test_get_mentor_feed_should_return_correct_list(self):
+        # subscribe to tier 1 of mentor no1
+        Subscription.objects.create(subscriber=self.user, tier=self.mentor.user.coach.tiers.first(), customer_id=self.user.customer_id)
+        response = self.c_auth.get(f'/api/v1/coach/{str(self.mentor.user.coach.surrogate)}/posts/')
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn('count', data)
+        self.assertEqual(data['count'], self.mentor_tier_1_post_data.count())
+
+    def test_get_mentor_feed_when_being_mentor_should_return_correct_list_with_mentor_posts(self):
+        response = self.c_mentor_auth.get(f'/api/v1/coach/{str(self.mentor.user.coach.surrogate)}/posts/')
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn('count', data)
+        self.assertEqual(data['count'], self.mentor.user.coach.posts.count())
