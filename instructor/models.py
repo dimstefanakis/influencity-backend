@@ -1,7 +1,10 @@
 from django.conf import settings
 from django.db import models
 from django.contrib.sites.models import Site
-from django.db.models.signals import pre_save
+from django.core.mail import mail_admins
+from django.urls import reverse
+from django.contrib.contenttypes.models import ContentType
+from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
 from django.core.exceptions import ObjectDoesNotExist
 from accounts.models import User
@@ -58,8 +61,11 @@ class CoachApplication(models.Model):
     approved = models.BooleanField(default=False)
     status = models.CharField(max_length=2, choices=STATUS_CHOICES, default=PENDING)
 
+    def get_admin_url(self):
+        content_type = ContentType.objects.get_for_model(self.__class__)
+        return reverse("admin:%s_%s_change" % (content_type.app_label, content_type.model), args=(self.id,))
+
     def save(self, *args, **kwargs):
-        
         # Automatically create a coach account when the application gets approved
         if self.status == self.APPROVED:
             try:
@@ -110,3 +116,13 @@ def setup_stripe_account(sender, instance, *args, **kwargs):
         instance.stripe_account_link = account_link.url
         instance.stripe_created = account_link.created
         instance.stripe_expires_at = account_link.expires_at
+
+
+@receiver(post_save, sender=CoachApplication)
+def send_mail_to_admins_about_new_application(sender, instance, created, **kwargs):
+    if created and not settings.DEBUG:
+        mail_admins(
+            'New mentor application',
+            f"Accept or deny this mentor application here https://api.troosh.app{instance.get_admin_url()}",
+            fail_silently=False,
+        )
