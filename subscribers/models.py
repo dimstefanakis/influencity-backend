@@ -1,3 +1,4 @@
+from django.apps import apps
 from django.db import models
 from django.db.models import JSONField
 from django.db.models.signals import pre_save
@@ -20,13 +21,25 @@ class Subscriber(CommonUser):
                                   related_name="subscriber")
 
     def save(self, *args, **kwargs):
+        CoachAvatar = apps.get_model('instructor.CoachAvatar')
+
         # subscriber and coach operate on the same user so they should share avatars
         if self.user.is_coach:
             self.user.coach.name = self.name
             if self.avatar:
-                self.user.coach.avatar.image = self.avatar.image
-                self.user.coach.avatar.height = self.avatar.height
-                self.user.coach.avatar.width = self.avatar.width
+                if not self.user.coach.avatar:
+                    coach_avatar = CoachAvatar.objects.create(image=self.avatar.image, height=self.avatar.height,
+                        width=self.avatar.width)
+                    self.user.coach.avatar = coach_avatar
+                else:
+                    # self.user.coach.avatar.delete()
+                    coach_avatar = CoachAvatar.objects.create(image=self.avatar.image, height=self.avatar.height,
+                        width=self.avatar.width)
+                    self.user.coach.avatar = coach_avatar
+
+                    # self.user.coach.avatar.image = self.avatar.image
+                    # self.user.coach.avatar.height = self.avatar.height
+                    # self.user.coach.avatar.width = self.avatar.width
             self.user.coach.save()
         super(Subscriber, self).save(*args, **kwargs)
 
