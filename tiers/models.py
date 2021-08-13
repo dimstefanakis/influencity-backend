@@ -106,7 +106,8 @@ class Tier(models.Model):
         if self.tier == self.FREE:
             self.credit = Decimal("0.00")
         elif self.tier == self.TIER1:
-            self.credit = Decimal("7.00")
+            # Set the default tier price to fixed 9
+            self.credit = Decimal("9.00")
         else:
             # Set the default premium pricing to 10
             if not self.credit:
