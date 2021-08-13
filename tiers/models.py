@@ -58,7 +58,7 @@ class Tier(models.Model):
     )
 
     surrogate = models.UUIDField(default=uuid.uuid4, null=True, blank=True)
-    credit = MoneyField(max_digits=7, decimal_places=2, default_currency='USD')
+    credit = MoneyField(max_digits=7, decimal_places=2, default_currency='EUR')
     label = models.CharField(max_length=20, null=True, blank=True)
     subheading = models.CharField(max_length=30, null=True, blank=True)
     coach = models.ForeignKey(Coach, on_delete=models.CASCADE, related_name="tiers")
