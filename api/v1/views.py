@@ -766,7 +766,7 @@ def project_payment_sheet(request, id):
                 else:
                     payment_intent = stripe.PaymentIntent.create(
                         amount=price.unit_amount,
-                        currency="usd",
+                        currency="eur",
                         customer=request.user.subscriber.customer_id,
                         application_fee_amount=int(price.unit_amount * 0.2),
                         transfer_data={
@@ -818,7 +818,7 @@ def join_project(request, id):
                         invoice_item = stripe.InvoiceItem.create(
                             customer=request.user.subscriber.customer_id,
                             price=project.price_id,
-                            currency="usd",
+                            currency="eur",
                             #amount=price.unit_amount,
                             discounts=[{
                                 'coupon': coupon.coupon_id,
@@ -844,7 +844,7 @@ def join_project(request, id):
                             customer=request.user.subscriber.customer_id,
                             price=project.price_id,
                             #amount=price.unit_amount,
-                            currency="usd",
+                            currency="eur",
                         )
 
                         # using int rounds down

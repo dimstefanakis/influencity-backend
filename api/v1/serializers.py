@@ -35,7 +35,7 @@ def money_to_integer(money):
     except AttributeError as e:
         return int(
             int(money) * (
-                10 ** get_currency_precision('usd')
+                10 ** get_currency_precision('eur')
             )
         )
 
@@ -547,7 +547,7 @@ class CreateOrUpdateProjectSerializer(serializers.ModelSerializer):
 
         try:
             new_credit = validated_data.pop('credit')
-            credit = Money(new_credit.replace(',', '.'), 'USD')
+            credit = Money(new_credit.replace(',', '.'), 'EUR')
         except Exception as e:
             pass
 
@@ -1280,7 +1280,7 @@ class UpdateTierSerializer(serializers.ModelSerializer):
                 if isinstance(credit, Decimal):
                     price = stripe.Price.create(
                         unit_amount=money_to_integer(credit),
-                        currency='usd',
+                        currency='eur',
                         recurring={"interval": "month"},
                         product=instance.product_id,
                     )

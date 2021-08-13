@@ -354,7 +354,7 @@ class ProjectTestCase(TestCase):
         project = Project.objects.get(pk=data['id'])
         self.assertEqual(project.milestones.count(), 1)
         self.assertEqual(project.prerequisites.count(), 2)
-        self.assertEqual(project.credit, Money(10, 'USD'))
+        self.assertEqual(project.credit, Money(10, 'EUR'))
     
     def test_create_project_as_mentor_without_name_should_return_400(self):
         body = {
@@ -508,7 +508,7 @@ class ProjectTestCase(TestCase):
         self.assertEqual(data['description'], 'test')
         project = Project.objects.get(pk=data['id'])
         self.assertEqual(project.milestones.count(), 1)
-        self.assertEqual(project.credit, Money(10, 'USD'))
+        self.assertEqual(project.credit, Money(10, 'EUR'))
 
     def test_update_project_as_mentor_should_return_200_with_updated_data(self):
         project = self.create_test_project()
@@ -534,7 +534,7 @@ class ProjectTestCase(TestCase):
         self.assertEqual(data['description'], 'test')
         project = Project.objects.get(pk=data['id'])
         self.assertEqual(project.milestones.count(), 2)
-        self.assertEqual(project.credit, Money(11, 'USD'))
+        self.assertEqual(project.credit, Money(11, 'EUR'))
 
     def test_update_project_as_mentor_with_missing_data_should_return_200_with_updated_data(self):
         project = self.create_test_project()
@@ -557,7 +557,7 @@ class ProjectTestCase(TestCase):
         self.assertEqual(data['description'], 'test')
         project = Project.objects.get(pk=data['id'])
         self.assertEqual(project.milestones.count(), 2)
-        self.assertEqual(project.credit, Money(11, 'USD'))
+        self.assertEqual(project.credit, Money(11, 'EUR'))
 
     def test_update_project_as_mentor_with_existing_milestone_id_should_not_create_new_milestone_and_return_200_with_updated_data(self):
         project = self.create_test_project()
@@ -581,7 +581,7 @@ class ProjectTestCase(TestCase):
         self.assertEqual(data['description'], 'test')
         project = Project.objects.get(pk=data['id'])
         self.assertEqual(project.milestones.count(), 1)
-        self.assertEqual(project.credit, Money(11, 'USD'))
+        self.assertEqual(project.credit, Money(11, 'EUR'))
 
     def test_update_project_as_mentor_with_prerequisites_should_delete_the_old_ones_and_create_new_ones_and_return_200_with_updated_data(self):
         project = self.create_test_project()
@@ -605,7 +605,7 @@ class ProjectTestCase(TestCase):
         project = Project.objects.get(pk=data['id'])
         self.assertEqual(project.milestones.count(), 1)
         self.assertEqual(project.prerequisites.count(), 1)
-        self.assertEqual(project.credit, Money(11, 'USD'))
+        self.assertEqual(project.credit, Money(11, 'EUR'))
 
     def test_update_project_as_mentor_with_milestone_empty_description_should_return_400(self):
         project = self.create_test_project()

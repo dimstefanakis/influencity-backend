@@ -56,7 +56,7 @@ class Project(models.Model):
     description = models.TextField(max_length=2000, blank=True, null=True)
     team_size = models.PositiveSmallIntegerField(default=1, blank=False, null=False)
     members = models.ManyToManyField(Subscriber, blank=True, related_name="projects")
-    credit = MoneyField(max_digits=7, decimal_places=2, default_currency='USD', default=10, null=True, blank=True)
+    credit = MoneyField(max_digits=7, decimal_places=2, default_currency='EUR', default=10, null=True, blank=True)
     product_id = models.CharField(max_length=50, null=True, blank=True)
     price_id = models.CharField(max_length=50, null=True, blank=True)
 
