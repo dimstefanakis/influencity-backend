@@ -69,6 +69,8 @@ CORS_ALLOW_CREDENTIALS = True
 
 # Application definition
 JQUERY_URL = "https://code.jquery.com/jquery-3.5.1.min.js"
+TAGGIT_CASE_INSENSITIVE = True
+
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -77,6 +79,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'django.contrib.sites',
+    'taggit',
     'allauth',
     'allauth.account',
     'allauth.socialaccount',

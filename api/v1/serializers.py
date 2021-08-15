@@ -1,6 +1,9 @@
 from operator import le
 from django.db.models import Q
 from django.db.models import Count
+from taggit.managers import TaggableManager
+from taggit.serializers import (TagListSerializerField,
+                                TaggitSerializer)
 from djmoney.money import Money
 from rest_framework import serializers
 from asgiref.sync import async_to_sync
@@ -40,7 +43,7 @@ def money_to_integer(money):
         )
 
 
-class CoachSerializer(serializers.ModelSerializer):
+class CoachSerializer(TaggitSerializer, serializers.ModelSerializer):
     expertise_field = serializers.StringRelatedField()
     avatar = serializers.SerializerMethodField()
     projects = serializers.SerializerMethodField()
@@ -49,6 +52,7 @@ class CoachSerializer(serializers.ModelSerializer):
     tier_full = serializers.SerializerMethodField()
     coupon = serializers.SerializerMethodField()
     number_of_projects_joined = serializers.SerializerMethodField()
+    tags = TagListSerializerField()
 
     @staticmethod
     def get_avatar(coach):
@@ -107,7 +111,7 @@ class CoachSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Coach
-        fields = ['name', 'avatar', 'bio', 'expertise_field', 'projects', 'number_of_projects_joined',
+        fields = ['name', 'avatar', 'bio', 'expertise_field', 'tags', 'projects', 'number_of_projects_joined',
                   'tier', 'tier_full', 'tiers', 'surrogate', 'charges_enabled', 'coupon', 'seen_welcome_page', 'submitted_expertise']
 
 
