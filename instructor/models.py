@@ -1,7 +1,9 @@
 from django.conf import settings
 from django.db import models
 from django.contrib.sites.models import Site
-from django.core.mail import mail_admins
+from django.core.mail import mail_admins, send_mail
+from django.template.loader import render_to_string
+from django.utils.html import strip_tags
 from django.urls import reverse
 from django.contrib.contenttypes.models import ContentType
 from django.db.models.signals import post_save, pre_save
@@ -86,7 +88,6 @@ class CoachApplication(models.Model):
 
 @receiver(pre_save, sender=Coach)
 def setup_stripe_account(sender, instance, *args, **kwargs):
-
     if not instance.stripe_id:
         account = stripe.Account.create(
             type="express",
@@ -126,3 +127,13 @@ def send_mail_to_admins_about_new_application(sender, instance, created, **kwarg
             f"Accept or deny this mentor application here https://api.troosh.app{instance.get_admin_url()}",
             fail_silently=False,
         )
+
+@receiver(post_save, sender=CoachApplication)
+def send_mail_to_mentors_after_successful_verification(sender, instance, created, **kwargs):
+    if instance.status == instance.APPROVED:
+        subject = 'You have been accepted as a mentor!'
+        html_message = render_to_string('instructor/successful_verification.html')
+        plain_message = strip_tags(html_message)
+        from_email = None # Uses the default mail defined in settings
+        to = instance.subscriber.user.email
+        send_mail(subject, plain_message, from_email, [to], html_message=html_message)
