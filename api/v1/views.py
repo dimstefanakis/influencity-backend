@@ -1,10 +1,11 @@
 import os
 from collections import OrderedDict
+from django.core.exceptions import ObjectDoesNotExist
 import mux_python
 from mux_python.rest import ApiException
 from django.contrib.sites.models import Site
 from django.conf import settings
-from django.http import HttpResponse
+from django.http import HttpResponse, Http404
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework.views import APIView
 from rest_framework import viewsets, mixins, permissions, generics, status
@@ -218,6 +219,12 @@ class CoachViewSet(viewsets.ModelViewSet):
 
         username = self.request.query_params.get('username', None)
         return queryset
+
+    def get_object(self):
+        try:
+            return Coach.objects.get(surrogate=self.kwargs.get('surrogate'))
+        except ObjectDoesNotExist:
+            raise Http404
 
     def get_permissions(self):
         try:
