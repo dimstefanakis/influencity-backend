@@ -99,12 +99,8 @@ def setup_stripe_account(sender, instance, *args, **kwargs):
             },
         )
 
-        if settings.DEBUG:
-            redirect = 'http://localhost:3000/users/oauth/callback'
-            refresh_url = "http://localhost:3000/reauth"
-        else:
-            redirect = 'https://troosh.app/users/oauth/callback'
-            refresh_url = 'https://troosh.app/reauth'
+        redirect = 'https://troosh.app/users/oauth/callback'
+        refresh_url = 'https://troosh.app/reauth'
 
         account_link = stripe.AccountLink.create(
             account=account.id,
