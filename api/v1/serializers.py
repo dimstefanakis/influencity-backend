@@ -1,6 +1,5 @@
 from operator import le
 from django.db.models import Q
-from django.db.models import Count
 from djmoney.money import Money
 from rest_framework import serializers
 from asgiref.sync import async_to_sync
@@ -141,8 +140,8 @@ class SubscriberSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Subscriber
-        fields = ['name', 'avatar', 'id']
-        read_only_fields = ['id']
+        fields = ['name', 'avatar', 'xp', 'level', 'level_progression', 'id']
+        read_only_fields = ['id', 'xp', 'level', 'level_progression']
 
 
 class SubscriberAvatarSerializer(serializers.ModelSerializer):

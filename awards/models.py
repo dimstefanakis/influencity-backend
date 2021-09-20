@@ -13,6 +13,7 @@ class AwardBase(models.Model):
     # when this field is true the award is created by the Troosh team
     # else it's created by the coaches
     is_primary = models.BooleanField(default=False)
+    xp = models.PositiveIntegerField(default=0)
     description = models.CharField(max_length=200, null=True, blank=True)
 
     def __str__(self):

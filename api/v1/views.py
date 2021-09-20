@@ -38,6 +38,26 @@ import os
 
 stripe.api_key = os.environ.get('STRIPE_SECRET_KEY')
 
+def get_user_posts(user):
+    post_query = Post.objects.none()
+    for coach in Coach.objects.filter(tiers__subscriptions__subscriber=user.subscriber).exclude(user=user):
+        subscription = Subscription.objects.filter(subscriber=user.subscriber, tier__coach=coach).first()
+        # by default get all posts available (except the ones that are chained to others, in that case just get the initial), 
+        # later we exclude posts based on the user subscription
+        post_query |= coach.posts.exclude(parent_post__isnull=False)
+            
+        # if use has subscriberd to tier 1 exclude tier 2 posts
+        if subscription.tier.tier==Tier.TIER1:
+            post_query = post_query.exclude(coach=coach, tier__tier=Tier.TIER2)
+        elif subscription.tier.tier==Tier.FREE:
+            post_query = post_query.exclude(coach=coach, tier__tier__in=[Tier.TIER2, Tier.TIER1])
+
+    # user might not be a coach, in that case an exception is thrown
+    try:
+        post_query = post_query | Post.objects.filter(coach=user.coach).exclude(parent_post__isnull=False)
+    except Exception:
+        pass
+    return post_query.distinct()
 
 class IsCoach(permissions.BasePermission):
     message = "User must be a mentor"
@@ -347,25 +367,25 @@ class NewPostsViewSet(viewsets.ModelViewSet):
     pagination_class = PostPagination
 
     def get_queryset(self):
-        post_query = Post.objects.none()
-        for coach in Coach.objects.filter(tiers__subscriptions__subscriber=self.request.user.subscriber).exclude(user=self.request.user):
-            subscription = Subscription.objects.filter(subscriber=self.request.user.subscriber, tier__coach=coach).first()
-            # by default get all posts available (except the ones that are chained to others, in that case just get the initial), 
-            # later we exclude posts based on the user subscription
-            post_query |= coach.posts.exclude(parent_post__isnull=False)
-                
-            # if use has subscriberd to tier 1 exclude tier 2 posts
-            if subscription.tier.tier==Tier.TIER1:
-                post_query = post_query.exclude(coach=coach, tier__tier=Tier.TIER2)
-            elif subscription.tier.tier==Tier.FREE:
-                post_query = post_query.exclude(coach=coach, tier__tier__in=[Tier.TIER2, Tier.TIER1])
+        return get_user_posts(self.request.user)
 
-        # user might not be a coach, in that case an exception is thrown
-        try:
-            post_query = post_query | Post.objects.filter(coach=self.request.user.coach).exclude(parent_post__isnull=False)
-        except Exception:
-            pass
-        return post_query.distinct()
+    def get_serializer_context(self):
+        return {
+            'request': self.request
+        }
+
+
+class NewPosts2ViewSet(viewsets.ModelViewSet):
+    permission_classes = [permissions.IsAuthenticated, ]
+    serializer_class = serializers.PostSerializer
+    pagination_class = PostPagination
+
+    def get_queryset(self):
+        user_posts = get_user_posts(self.request.user)
+        if self.request.user.subscriber.last_seen_post:
+            unseen_posts = user_posts.filter(created__gt=self.request.user.subscriber.last_seen_post.created)
+            return unseen_posts
+        return user_posts
 
     def get_serializer_context(self):
         return {
@@ -400,6 +420,23 @@ class ProjectsViewSet(viewsets.ModelViewSet):
         else:
             permission_classes = [permissions.IsAuthenticated]
         return [permission() for permission in permission_classes]
+
+
+class MyCoachesProjectsViewSet(viewsets.ModelViewSet):
+    queryset = Project.objects.all()
+    serializer_class = serializers.MyProjectsSerializer
+
+    def get_queryset(self):
+        projects = Project.objects.none()
+        for subscription in self.request.user.subscriber.subscriptions.all():
+            projects |= subscription.tier.coach.created_projects.all()
+        return projects.distinct()
+        # return self.request.user.subscriber.projects.all()
+
+    def get_serializer_context(self):
+        return {
+            'request': self.request,
+        }
 
 
 class MyProjectsViewSet(viewsets.ModelViewSet):
@@ -643,13 +680,43 @@ class NotificationsViewSet(viewsets.ModelViewSet):
 def get_unread_count(request):
     return Response({'unread_count': request.user.notifications.unread().count()})
 
-
 @api_view(http_method_names=['POST'])
 @permission_classes((permissions.IsAuthenticated,))
 def mark_all_read(request):
     request.user.notifications.mark_all_as_read()
     return Response({'unread_count': request.user.notifications.unread().count()})
 
+@api_view(http_method_names=['GET'])
+@permission_classes((permissions.IsAuthenticated,))
+def get_unseen_posts(request):
+    user = request.user
+    user_posts = get_user_posts(user)
+    if user.subscriber.last_seen_post:
+        unseen_posts = user_posts.filter(created__gt=user.subscriber.last_seen_post.created)
+        return Response({'unseen_posts': unseen_posts})
+    return Response({'unseen_posts': user_posts})
+        
+@api_view(http_method_names=['GET'])
+@permission_classes((permissions.IsAuthenticated,))
+def get_unseen_post_count(request):
+    user = request.user
+    user_posts = get_user_posts(user)
+    if user.subscriber.last_seen_post:
+        unseen_post_count = user_posts.filter(created__gt=user.subscriber.last_seen_post.created).count()
+        return Response({'unseen_post_count': unseen_post_count})
+    return Response({'unseen_post_count': user_posts.count()})
+
+@api_view(http_method_names=['POST'])
+@permission_classes((permissions.IsAuthenticated,))
+def mark_last_seen_post(request):
+    user = request.user
+    post_id = request.data['id']
+    post = Post.objects.filter(surrogate=post_id)
+    if post.exists():
+        post = post.first()
+        user.subscriber.last_seen_post = post
+        user.subscriber.save()
+        return Response({'last_seen_post': post_id})
 
 @api_view(http_method_names=['GET', 'PATCH'])
 @permission_classes((permissions.IsAuthenticated,))

@@ -26,6 +26,7 @@ router.register(r'comment_replies/(?P<comment_id>[0-9a-f-]+)', views.CommentRepl
 router.register(r'projects/(?P<project_id>[0-9a-f-]+)/teams', views.TeamsViewSet, basename="project_teams")
 router.register(r'projects/(?P<project_id>[0-9a-f-]+)/posts', views.ProjectPostsViewSet, basename="project_posts")
 router.register(r'projects', views.ProjectsViewSet)
+router.register(r'my_coaches_projects', views.MyCoachesProjectsViewSet)
 router.register(r'milestone_reports/(?P<milestone_id>\d+)', views.MilestoneCompletionReportViewSet)
 router.register(r'my_projects', views.MyProjectsViewSet)
 router.register(r'created_projects', views.MyCreatedProjectsViewSet)
@@ -45,6 +46,9 @@ urlpatterns = [
     path('v1/subscriber/me/', views.subscriber_me, name="subscriber_me"),
     path('v1/coach/me/', views.coach_me, name="coach_me"),
     path('v1/subscribe/<uuid:id>', views.subscribe, name="subscribe"),
+    path('v1/mark_last_seen_post/', views.mark_last_seen_post, name="mark_last_seen_post"),
+    path('v1/unseen_post_count/', views.get_unseen_post_count, name="get_unseen_post_count"),
+    path('v1/unseen_posts/', views.get_unseen_posts, name="get_unseen_posts"),
     path('v1/create_stripe_subscription/<uuid:id>', views.create_stripe_subscription, name="create_stripe_subscription"),
     path('v1/cancel_subscription/<uuid:id>', views.cancel_subscription, name="cancel_subscription"),
     path('v1/preview_subscription_invoice/<str:id>', views.preview_subscription_invoice, name="preview_subscription_invoice"),
