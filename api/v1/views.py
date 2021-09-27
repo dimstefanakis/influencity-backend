@@ -1491,7 +1491,7 @@ def upload_video(request):
 
     # API Client Initialization
     request = mux_python.CreateUploadRequest(
-        new_asset_settings=create_asset_request, test=True)
+        new_asset_settings=create_asset_request, test=True if settings.DEVELOPMENT_MODE else False)
     direct_uploads_api = mux_python.DirectUploadsApi(
         mux_python.ApiClient(configuration))
     response = direct_uploads_api.create_direct_upload(request)
@@ -1525,7 +1525,7 @@ def upload_milestonecompletion_video(request):
 
     # API Client Initialization
     request = mux_python.CreateUploadRequest(
-        new_asset_settings=create_asset_request, test=True)
+        new_asset_settings=create_asset_request, test=True if settings.DEVELOPMENT_MODE else False)
     direct_uploads_api = mux_python.DirectUploadsApi(
         mux_python.ApiClient(configuration))
     response = direct_uploads_api.create_direct_upload(request)
