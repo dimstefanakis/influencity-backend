@@ -1,6 +1,7 @@
 from django.urls import path, include
 from django.conf.urls import url
 from rest_framework import routers, serializers, viewsets
+from push_notifications.api.rest_framework import APNSDeviceAuthorizedViewSet, GCMDeviceAuthorizedViewSet
 from . import views
 
 
@@ -40,6 +41,8 @@ router.register(r'my_chat_rooms/(?P<surrogate>[0-9a-f-]+)/messages', views.RoomM
                 basename="chat_rooms_messages")
 router.register(r'my_chat_rooms', views.MyChatRoomsViewSet, basename="my_chat_rooms")
 router.register(r'create_message', views.CreateMessageViewSet, basename="create_message")
+router.register(r'device/apns', APNSDeviceAuthorizedViewSet)
+router.register(r'device/gcm', GCMDeviceAuthorizedViewSet)
 
 urlpatterns = [
     path('v1/', include(router.urls)),

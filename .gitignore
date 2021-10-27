@@ -106,3 +106,5 @@ media/
 *.pyc
 *.db
 *.pid
+aps.pem
+apns-dev.pem
