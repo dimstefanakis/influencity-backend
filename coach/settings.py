@@ -237,7 +237,7 @@ REST_FRAMEWORK = {
 }
 
 PUSH_NOTIFICATIONS_SETTINGS = {
-    # "FCM_API_KEY": "[your api key]",
+    "FCM_API_KEY": os.environ.get('FCM_API_KEY'),
     # "GCM_API_KEY": "[your api key]",
     "APNS_CERTIFICATE": "../apns-dev.pem",
     "APNS_TOPIC": "org.reactjs.native.example.influencity",
