@@ -83,12 +83,12 @@ def message_created(sender, instance, created, **kwargs):
         # search for mentions in message and send notifications
         mentions = re.findall('@[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}', instance.text)
         # send regular message notifications if there are no mentions
-        if len(mentions) == 0:
-            for subscriber in instance.chat_room.members.all():
-                gcm_devices = GCMDevice.objects.filter(user=subscriber.user).all()
-                apns_devices = APNSDevice.objects.filter(user=subscriber.user).all()
-                for device in [*gcm_devices, *apns_devices]:
-                    device.send_message(message={"title" : instance.chat_room.project.name, "body" : f"{instance.user.subscriber.name} mentioned you"})
+        # if len(mentions) == 0:
+        #     for subscriber in instance.chat_room.members.all():
+        #         gcm_devices = GCMDevice.objects.filter(user=subscriber.user).all()
+        #         apns_devices = APNSDevice.objects.filter(user=subscriber.user).all()
+        #         for device in [*gcm_devices, *apns_devices]:
+        #             device.send_message(message={"title" : instance.chat_room.project.name, "body" : f"{instance.user.subscriber.name} mentioned you"})
 
         for mention in mentions:
             user_id = mention[1:]

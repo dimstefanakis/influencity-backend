@@ -44,13 +44,15 @@ def get_user_posts(user):
         subscription = Subscription.objects.filter(subscriber=user.subscriber, tier__coach=coach).first()
         # by default get all posts available (except the ones that are chained to others, in that case just get the initial), 
         # later we exclude posts based on the user subscription
+
+        # UPDATE: all posts are free now so just return everything
         post_query |= coach.posts.exclude(parent_post__isnull=False)
             
-        # if use has subscriberd to tier 1 exclude tier 2 posts
-        if subscription.tier.tier==Tier.TIER1:
-            post_query = post_query.exclude(coach=coach, tier__tier=Tier.TIER2)
-        elif subscription.tier.tier==Tier.FREE:
-            post_query = post_query.exclude(coach=coach, tier__tier__in=[Tier.TIER2, Tier.TIER1])
+        # # if use has subscriberd to tier 1 exclude tier 2 posts
+        # if subscription.tier.tier==Tier.TIER1:
+        #     post_query = post_query.exclude(coach=coach, tier__tier=Tier.TIER2)
+        # elif subscription.tier.tier==Tier.FREE:
+        #     post_query = post_query.exclude(coach=coach, tier__tier__in=[Tier.TIER2, Tier.TIER1])
 
     # user might not be a coach, in that case an exception is thrown
     try:
@@ -340,18 +342,20 @@ class CoachPostViewSet(viewsets.ModelViewSet):
         subscription = Subscription.objects.filter(subscriber=self.request.user.subscriber, tier__coach=coach).first()
         # by default get all posts available (except the ones that are chained to others, in that case just get the initial), 
         # later we exclude posts based on the user subscription
+
+        # UPDATE: all posts are free now so just give everything
         post_query |= coach.posts.exclude(parent_post__isnull=False)
             
-        if subscription:
-            # if use has subscriberd to tier 1 exclude tier 2 posts
-            if subscription.tier.tier==Tier.TIER1:
-                post_query = post_query.exclude(coach=coach, tier__tier=Tier.TIER2)
-            elif subscription.tier.tier==Tier.FREE:
-                post_query = post_query.exclude(coach=coach, tier__tier__in=[Tier.TIER2, Tier.TIER1])
-        else:
-            # if the user is the coach don't exclude anything
-            if self.request.user != coach.user:
-                post_query = post_query.exclude(coach=coach, tier__tier__in=[Tier.TIER2, Tier.TIER1])
+        # if subscription:
+        #     # if use has subscriberd to tier 1 exclude tier 2 posts
+        #     if subscription.tier.tier==Tier.TIER1:
+        #         post_query = post_query.exclude(coach=coach, tier__tier=Tier.TIER2)
+        #     elif subscription.tier.tier==Tier.FREE:
+        #         post_query = post_query.exclude(coach=coach, tier__tier__in=[Tier.TIER2, Tier.TIER1])
+        # else:
+        #     # if the user is the coach don't exclude anything
+        #     if self.request.user != coach.user:
+        #         post_query = post_query.exclude(coach=coach, tier__tier__in=[Tier.TIER2, Tier.TIER1])
 
         return post_query.distinct()
 
@@ -821,44 +825,49 @@ def project_payment_sheet(request, id):
         if not subscription.exists():
             return Response({'error': 'You need to be at least Tier 1 subsciber or above to join projects'})
         subscription = subscription.first()
-        if subscription.tier.tier == Tier.FREE:
-            return Response({'error': 'Free tier subscribers cannot join projects'})
-        elif subscription.tier.tier == Tier.TIER1:
-            invoice = None
-            payment_intent = None
-            coupon = Coupon.objects.filter(subscriber=request.user.subscriber, coach=project.coach)
-            if coupon.exists():
-                coupon = coupon.first()
-                price = stripe.Price.retrieve(
-                    project.price_id,
-                )
-                if coupon.valid:
-                    # 100% discount is applied here, no need for stripe to do anything
-                    handle_join_project(project, request.user.subscriber, request)
-                    coupon.valid = False
-                    coupon.save()
-                else:
-                    payment_intent = stripe.PaymentIntent.create(
-                        amount=price.unit_amount,
-                        currency="eur",
-                        customer=request.user.subscriber.customer_id,
-                        application_fee_amount=int(price.unit_amount * 0.2),
-                        transfer_data={
-                            "destination": project.coach.stripe_id,
-                        },
-                        metadata={
-                            'type': 'project',
-                            'subscriber': request.user.subscriber.surrogate,
-                            'troosh_status': 'created',
-                            'id': project.surrogate,
-                        }
-                    )
+        # if subscription.tier.tier == Tier.FREE:
+        #     return Response({'error': 'Free tier subscribers cannot join projects'})
+        invoice = None
+        payment_intent = None
+        coupon = Coupon.objects.filter(subscriber=request.user.subscriber, coach=project.coach)
+        price = stripe.Price.retrieve(
+            project.price_id,
+        )
+        if coupon.exists():
+            coupon = coupon.first()
+            if coupon.valid:
+                # 100% discount is applied here, no need for stripe to do anything
+                handle_join_project(project, request.user.subscriber, request)
+                coupon.valid = False
+                coupon.save()
                 return Response({
                     'paymentIntent': payment_intent.client_secret if payment_intent else None,
                     'paymentIntentId': payment_intent.id if payment_intent else None,
                     'ephemeralKey': ephemeralKey.secret if ephemeralKey else None,
                     'customer': user.subscriber.customer_id
                 })
+        else:
+            payment_intent = stripe.PaymentIntent.create(
+                amount=price.unit_amount,
+                currency="eur",
+                customer=request.user.subscriber.customer_id,
+                application_fee_amount=int(price.unit_amount * 0.2),
+                transfer_data={
+                    "destination": project.coach.stripe_id,
+                },
+                metadata={
+                    'type': 'project',
+                    'subscriber': request.user.subscriber.surrogate,
+                    'troosh_status': 'created',
+                    'id': project.surrogate,
+                }
+            )
+            return Response({
+                'paymentIntent': payment_intent.client_secret if payment_intent else None,
+                'paymentIntentId': payment_intent.id if payment_intent else None,
+                'ephemeralKey': ephemeralKey.secret if ephemeralKey else None,
+                'customer': user.subscriber.customer_id
+            })
 
 @api_view(http_method_names=['POST'])
 @parser_classes([JSONParser])
@@ -1652,7 +1661,7 @@ def stripe_webhook(request):
             metadata={
                 'troosh_status': 'payment_failed'
             }
-        )            
+        )
 
     if event.type == 'payment_intent.succeeded':
         payment_intent_id = data_object['id']
