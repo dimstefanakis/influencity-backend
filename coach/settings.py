@@ -39,7 +39,8 @@ DEBUG = os.environ.get("DEBUG", "False") == "True"
 DEVELOPMENT_MODE = os.environ.get("DEVELOPMENT_MODE", "False") == "True"
 ACCOUNT_EMAIL_VERIFICATION = 'none'
 
-ALLOWED_HOSTS = os.environ.get("DJANGO_ALLOWED_HOSTS", "127.0.0.1,localhost,192.168.1.10,20a555a15e3e.ngrok.io").split(",")
+ALLOWED_HOSTS = os.environ.get(
+    "DJANGO_ALLOWED_HOSTS", "127.0.0.1,localhost,192.168.1.10,20a555a15e3e.ngrok.io,146a-2a02-587-4503-483b-cdad-5959-d585-9834.ngrok.io").split(",")
 # EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
@@ -63,6 +64,7 @@ CORS_ALLOWED_ORIGINS = [
     "https://api.troosh.app",
     "http://localhost:8000",
     "http://localhost:3000",
+    "https://146a-2a02-587-4503-483b-cdad-5959-d585-9834.ngrok.io",
 ]
 
 CORS_ALLOW_CREDENTIALS = True
@@ -105,6 +107,7 @@ INSTALLED_APPS = [
     'projects',
     'chat',
     'awards',
+    'qa',
     'api'
 ]
 

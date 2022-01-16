@@ -14,6 +14,7 @@ from tiers.models import Tier, Benefit
 from reacts.models import React
 from chat.models import ChatRoom, Message, MessageImage
 from awards.models import Award, AwardBase
+from qa.models import Question, QuestionInvitation
 from babel.numbers import get_currency_precision
 import channels.layers
 import stripe
@@ -1430,6 +1431,23 @@ class AwardSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Award
+        fields = '__all__'
+
+
+class QuestionSerializer(serializers.ModelSerializer):
+    answered_by = CoachSerializer()
+
+    class Meta:
+        model = Question
+        fields = '__all__'
+
+
+class QuestionInvitationSerializer(serializers.ModelSerializer):
+    question = QuestionSerializer()
+    coach = CoachSerializer()
+
+    class Meta:
+        model = QuestionInvitation
         fields = '__all__'
 
 

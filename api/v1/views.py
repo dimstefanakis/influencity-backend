@@ -29,6 +29,7 @@ from comments.models import Comment
 from reacts.models import React
 from chat.models import ChatRoom, Message
 from awards.models import Award, AwardBase
+from qa.models import Question, QuestionInvitation
 from . import serializers
 import uuid
 import stripe
@@ -678,6 +679,34 @@ class NotificationsViewSet(viewsets.ModelViewSet):
             'request': self.request,
         }
 
+@api_view(http_method_names=['POST'])
+@permission_classes((permissions.AllowAny,))
+def ask_question(request):
+    question_body = request.data.get('body')
+    when = request.data.get('when')
+    question = Question.objects.create(body=question_body)
+    # tags = extract_tags_from_question(question)
+    # find expertise in tags
+    expertise = 'programming'
+    coaches = Coach.objects.filter(expertise_field__name=expertise).all()
+    for coach in coaches:
+
+        # check if coach has SMS notifications enabled and send a SMS with the question
+        # and a link to his questions dashboard
+        
+        # here send mandatory email with same stuff as the SMS
+        pass
+
+    serializer = serializers.QuestionSerializer(question)
+    return Response({'question': serializer.data})
+
+@api_view(http_method_names=['GET'])
+@permission_classes((permissions.AllowAny,))
+def check_available_coaches_for_question(request, question_id):
+    question = Question.objects.filter(surrogate=question_id).first()
+    coaches = Coach.objects.all()
+    serializer = serializers.CoachSerializer(coaches, context={'request':request}, many=True)
+    return Response({'available_coaches': serializer.data})
 
 @api_view(http_method_names=['GET'])
 @permission_classes((permissions.IsAuthenticated,))
@@ -1384,6 +1413,26 @@ def attach_payment_method(request):
         return Response({'payment_id': payment_method.id})
     if request.method == 'DELETE':
         return Response({'payment_id': None})
+
+
+@api_view(http_method_names=['POST'])
+@parser_classes([JSONParser])
+@permission_classes((permissions.AllowAny,))
+def create_qa_checkout_session(request):
+    user = request.user
+    try:
+        checkout_session = stripe.checkout.Session.create(
+            line_items=[
+                {
+                    # Provide the exact Price ID (for example, pr_1234) of the product you want to sell
+                    #'price': '{{PRICE_ID}}',
+                    'quantity': 1,
+                },
+            ],
+            mode='payment',
+        )
+    except Exception as e:
+        return str(e)
 
 
 @api_view(http_method_names=['GET'])
