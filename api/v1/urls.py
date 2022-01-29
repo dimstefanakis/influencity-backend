@@ -75,6 +75,8 @@ urlpatterns = [
     path('v1/milestone_report/<uuid:milestone_report_id>/update/', views.update_milestone_report_from_task_id, name="update_milestone_report_from_task_id"),
     path('v1/select_expertise/', views.select_expertise, name="select_expertise"),
     path('v1/ask_question/', views.ask_question, name="ask_question"),
+    path('v1/create_qa_checkout_session/',
+         views.create_qa_checkout_session, name="create_qa_checkout_session"),
     path('v1/check_available_coaches_for_question/<uuid:question_id>/',
          views.check_available_coaches_for_question, name="check_available_coaches_for_question"),
 ]

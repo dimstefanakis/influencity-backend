@@ -1,11 +1,9 @@
 aioredis==1.3.1
-apns2 @ git+git://github.com/Pr0Ger/PyAPNs2.git@5e4a938cd2e24249f6345aac27ba783defa5a63f
 asgiref==3.2.10
 async-timeout==3.0.1
 attrs==20.3.0
 autobahn==20.7.1
 Automat==20.2.0
-autopep8==1.6.0
 Babel==2.9.0
 boto3==1.17.14
 botocore==1.20.14
@@ -14,6 +12,7 @@ cffi==1.14.4
 channels==3.0.2
 channels-redis==3.2.0
 chardet==3.0.4
+charset-normalizer==2.0.10
 constantly==15.1.0
 coreapi==2.3.3
 coreschema==0.0.4
@@ -24,7 +23,7 @@ defusedxml==0.6.0
 dj-database-url==0.5.0
 Django==3.1
 django-allauth==0.42.0
-django-cors-headers==3.7.0
+django-cors-headers==3.11.0
 django-environ==0.4.5
 django-filter==2.3.0
 django-js-asset==1.2.2
@@ -47,6 +46,8 @@ http-ece==1.1.0
 hyper==0.7.0
 hyperframe==3.2.0
 hyperlink==20.0.1
+ibm-cloud-sdk-core==3.14.0
+ibm-watson==5.3.1
 idna==2.10
 incremental==17.5.0
 inflection==0.5.1
@@ -67,17 +68,16 @@ py-moneyed==0.8.0
 py-vapid==1.7.1
 pyasn1==0.4.8
 pyasn1-modules==0.2.8
-pycodestyle==2.8.0
 pycparser==2.20
 PyHamcrest==2.0.2
-PyJWT==2.0.0
+PyJWT==2.3.0
 pyOpenSSL==19.1.0
 pyparsing==2.4.7
 python-dateutil==2.8.1
 python3-openid==3.2.0
 pytz==2020.4
 pywebpush==1.11.0
-requests==2.25.0
+requests==2.27.1
 requests-oauthlib==1.3.0
 ruamel.yaml==0.16.12
 s3transfer==0.3.4
@@ -86,10 +86,10 @@ six==1.15.0
 sqlparse==0.4.1
 stripe==2.55.1
 swapper==1.1.2.post1
-toml==0.10.2
-twilio==7.5.0
 Twisted==20.3.0
 txaio==20.4.1
 uritemplate==3.0.1
 urllib3==1.26.2
+websocket-client==1.1.0
 zope.interface==5.2.0
+apns2 @ git+git://github.com/Pr0Ger/PyAPNs2.git@5e4a938cd2e24249f6345aac27ba783defa5a63f

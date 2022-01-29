@@ -14,7 +14,7 @@ from tiers.models import Tier, Benefit
 from reacts.models import React
 from chat.models import ChatRoom, Message, MessageImage
 from awards.models import Award, AwardBase
-from qa.models import Question, QuestionInvitation
+from qa.models import Question, QuestionInvitation, QaSession, CommonQuestion, AvailableTimeRange
 from babel.numbers import get_currency_precision
 import channels.layers
 import stripe
@@ -40,6 +40,24 @@ def money_to_integer(money):
         )
 
 
+class QaSessionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = QaSession
+        fields = ['surrogate', 'minutes', 'credit', 'product_id', 'price_id']
+
+
+class CommonQuestionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CommonQuestion
+        fields = '__all__'
+
+
+class AvailableTimeRangeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AvailableTimeRange
+        fields = ['weekday', 'start_time', 'end_time']
+
+
 class CoachSerializer(serializers.ModelSerializer):
     expertise_field = serializers.StringRelatedField()
     avatar = serializers.SerializerMethodField()
@@ -49,6 +67,9 @@ class CoachSerializer(serializers.ModelSerializer):
     tier_full = serializers.SerializerMethodField()
     coupon = serializers.SerializerMethodField()
     number_of_projects_joined = serializers.SerializerMethodField()
+    qa_sessions = serializers.SerializerMethodField()
+    common_questions = serializers.SerializerMethodField()
+    available_time_ranges = serializers.SerializerMethodField()
 
     @staticmethod
     def get_avatar(coach):
@@ -90,6 +111,25 @@ class CoachSerializer(serializers.ModelSerializer):
         except KeyError:
             return None
 
+    def get_qa_sessions(self, coach):
+        context = {
+            "request": self.context["request"]
+        }
+        return QaSessionSerializer(coach.qa_sessions.all(), many=True, context=context).data
+
+    def get_common_questions(self, coach):
+        context = {
+            "request": self.context["request"]
+        }
+        return CommonQuestionSerializer(coach.common_questions.all(), many=True, context=context).data
+
+    def get_available_time_ranges(self, coach):
+        context = {
+            "request": self.context["request"]
+        }
+        return AvailableTimeRangeSerializer(coach.available_time_ranges.all(), many=True, context=context).data
+
+
     # get number of projects the user has subscribed to for this coach
     # this is used for frontend validation because Tier 1 subscribers only have access to one project
     # and free subs have access to none
@@ -108,7 +148,7 @@ class CoachSerializer(serializers.ModelSerializer):
     class Meta:
         model = Coach
         fields = ['name', 'avatar', 'bio', 'expertise_field', 'projects', 'number_of_projects_joined',
-                  'tier', 'tier_full', 'tiers', 'surrogate', 'charges_enabled', 'coupon', 'seen_welcome_page', 'submitted_expertise']
+                  'tier', 'tier_full', 'tiers', 'qa_sessions', 'available_time_ranges', 'common_questions', 'surrogate', 'charges_enabled', 'coupon', 'seen_welcome_page', 'submitted_expertise']
 
 
 class CoachApplicationSerializer(serializers.ModelSerializer):
@@ -1435,7 +1475,7 @@ class AwardSerializer(serializers.ModelSerializer):
 
 
 class QuestionSerializer(serializers.ModelSerializer):
-    answered_by = CoachSerializer()
+    delivered_by = CoachSerializer()
 
     class Meta:
         model = Question

@@ -9,6 +9,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
 from django.core.exceptions import ObjectDoesNotExist
+from djmoney.models.fields import MoneyField
 from accounts.models import User
 from subscribers.models import Subscriber
 from expertisefields.models import ExpertiseField
@@ -33,6 +34,9 @@ class Coach(CommonUser):
     bio = models.CharField(max_length=160, blank=True, null=True)
     seen_welcome_page = models.BooleanField(default=False)
     submitted_expertise = models.BooleanField(default=False)
+    # This is the session price for 30 minutes, defaults to 15 eur per 30 minutes
+    qa_session_credit = MoneyField(max_digits=7, decimal_places=2,
+                        default_currency='EUR', default=15, null=True, blank=True)
 
     # required for stripe
     stripe_id = models.CharField(max_length=40, null=True, blank=True)
