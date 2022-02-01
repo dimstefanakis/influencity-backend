@@ -79,4 +79,8 @@ urlpatterns = [
          views.create_qa_checkout_session, name="create_qa_checkout_session"),
     path('v1/check_available_coaches_for_question/<uuid:question_id>/',
          views.check_available_coaches_for_question, name="check_available_coaches_for_question"),
+    path('v1/change_availability_time_ranges/',
+         views.change_coach_qa_availability, name="change_availability_time_ranges"),
+    path('v1/change_common_questions/',
+         views.change_common_questions, name="change_common_questions"),
 ]

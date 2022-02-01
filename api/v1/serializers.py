@@ -55,7 +55,7 @@ class CommonQuestionSerializer(serializers.ModelSerializer):
 class AvailableTimeRangeSerializer(serializers.ModelSerializer):
     class Meta:
         model = AvailableTimeRange
-        fields = ['weekday', 'start_time', 'end_time']
+        fields = ['id', 'weekday', 'start_time', 'end_time']
 
 
 class CoachSerializer(serializers.ModelSerializer):

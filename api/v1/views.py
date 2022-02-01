@@ -793,39 +793,34 @@ def check_available_coaches_for_question(request, question_id):
 
 @api_view(http_method_names=['POST'])
 @permission_classes((permissions.IsAuthenticated,))
+def change_common_questions(request):
+    coach = request.user.coach
+    common_questions = request.data
+    if common_questions:
+        coach.common_questions.all().delete()
+        for question in common_questions:
+            CommonQuestion.objects.create(body=question, coach=coach)
+    return Response({'status': 'ok'})
+
+
+@api_view(http_method_names=['POST'])
+@permission_classes((permissions.IsAuthenticated,))
 def change_coach_qa_availability(request):
     coach = request.user.coach
     availability_ranges = request.data.get('availability_ranges')
-    # availability_ranges looks like this
-    # [
-    #     {
-    #         'day': '1', # 1 equals Monday
-    #         'time_ranges': [
-    #             {
-    #                 'start_time': '9:00',
-    #                 'end_time': '10:00'
-    #             },
-    #             {
-    #                 'start_time': '11:00',
-    #                 'end_time': '12:00'
-    #             }
-    #         ]
-    #     }
-    # ]
     if availability_ranges:
         # just delete the old ones and add the new ones again
         coach.available_time_ranges.all().delete()
-        for item in availability_ranges:
-            day = item['day']
-            time_ranges = item['time_ranges']
-            for time_range in time_ranges:
-                start_time_hour = time_range['start_time'][2:]
-                start_time_minutes = time_range['start_time'][:2]
-                end_time_hour = time_range['end_time'][2:]
-                end_time_minutes = time_range['end_time'][:2]
-                AvailableTimeRange.objects.create(weekday=day, coach=coach, 
-                    start_time=datetime.time(hour=start_time_hour, minute=start_time_minutes), 
-                    end_time=datetime.time(hour=end_time_hour, minute=end_time_minutes))
+        for time_range in availability_ranges:
+            weekday = time_range['weekday']
+            start_time_hour = int(time_range['start_time'][:2])
+            start_time_minutes = int(time_range['start_time'][3:5])
+            end_time_hour = int(time_range['end_time'][:2])
+            end_time_minutes = int(time_range['end_time'][3:5])
+            AvailableTimeRange.objects.create(weekday=weekday, coach=coach, 
+                start_time=datetime.time(hour=start_time_hour, minute=start_time_minutes), 
+                end_time=datetime.time(hour=end_time_hour, minute=end_time_minutes))
+    return Response({'status': 'ok'})
 
 
 @api_view(http_method_names=['GET'])

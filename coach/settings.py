@@ -64,7 +64,7 @@ CORS_ALLOWED_ORIGINS = [
     "https://api.troosh.app",
     "http://localhost:8000",
     "http://localhost:3000",
-    "https://146a-2a02-587-4503-483b-cdad-5959-d585-9834.ngrok.io",
+    "https://748f-2a02-587-4503-483b-2dbb-5ec6-ca58-99d4.ngrok.io",
 ]
 
 CORS_ALLOW_CREDENTIALS = True
