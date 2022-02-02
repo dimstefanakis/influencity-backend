@@ -1,6 +1,8 @@
 from ibm_watson import NaturalLanguageUnderstandingV1
 from ibm_cloud_sdk_core.authenticators import IAMAuthenticator
 from ibm_watson.natural_language_understanding_v1 import Features, ClassificationsOptions, CategoriesOptions, KeywordsOptions
+import requests
+import json
 import os
 
 api_key = os.environ.get('WATSON_KEY')
@@ -34,3 +36,44 @@ def extract_tags_from_question(question):
             'umbrella_term': '',
             'is_weak': weak_results
         }
+
+
+def create_meeting(qa_session):
+    meetingdetails = {"topic": "The title of your zoom meeting",
+                  "type": 2,
+                  "start_time": "2022-06-14T10: 21: 57",
+                  "duration": "45",
+                  "timezone": "Europe/Madrid",
+                  "agenda": "test",
+ 
+                  "recurrence": {"type": 1,
+                                 "repeat_interval": 1
+                                 },
+                  "settings": {"host_video": "true",
+                               "participant_video": "true",
+                               "join_before_host": "False",
+                               "mute_upon_entry": "False",
+                               "watermark": "true",
+                               "audio": "voip",
+                               "auto_recording": "cloud"
+                               }
+                  }
+
+    headers = {'authorization': 'Bearer ' + os.environ.get('ZOOM_JWT'),
+            'content-type': 'application/json'}
+    r = requests.post(
+        f'https://api.zoom.us/v2/users/me/meetings',
+        headers=headers, data=json.dumps(meetingdetails))
+ 
+    print("\n creating zoom meeting ... \n")
+    # print(r.text)
+    # converting the output into json and extracting the details
+    y = json.loads(r.text)
+    join_URL = y["join_url"]
+    meetingPassword = y["password"]
+ 
+    print(
+        f'\n here is your zoom meeting link {join_URL} and your \
+        password: "{meetingPassword}"\n')
+
+    return {'url': join_URL, 'password': meetingPassword}

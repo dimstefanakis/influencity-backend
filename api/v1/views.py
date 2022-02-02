@@ -7,6 +7,7 @@ from django.contrib.sites.models import Site
 from django.conf import settings
 from django.http import HttpResponse, Http404
 from django.views.decorators.csrf import csrf_exempt
+from django.core.mail import send_mail
 from rest_framework.views import APIView
 from rest_framework import viewsets, mixins, permissions, generics, status
 from rest_framework.decorators import api_view, permission_classes
@@ -31,7 +32,7 @@ from chat.models import ChatRoom, Message
 from awards.models import Award, AwardBase
 from qa.models import Question, QuestionInvitation, QaSession, AvailableTimeRange, CommonQuestion
 from . import serializers
-from .utils import extract_tags_from_question
+from .utils import extract_tags_from_question, create_meeting
 import uuid
 import stripe
 import json
@@ -741,8 +742,12 @@ def create_qa_checkout_session(request):
     qa_session_id = request.data.get('qa_session_id')
     qa_session = QaSession.objects.get(surrogate=qa_session_id)
 
-    success_url = 'https://troosh.app/users/oauth/callback'
-    cancel_url = 'https://troosh.app/reauth'
+    if os.environ.get('DEBUG') == 'True':
+        success_url = 'http://localhost:3000/checkout?status=success'
+        cancel_url = 'http://localhost:3000/checkout?status=canceled'
+    else:
+        success_url = 'https://questions.troosh.app/checkout?status=success'
+        cancel_url = 'https://questions.troosh.app/checkout?status=canceled'
 
     checkout_session = stripe.checkout.Session.create(
         line_items=[
@@ -751,6 +756,7 @@ def create_qa_checkout_session(request):
                 'quantity': 1,
             },
         ],
+        metadata={'type': 'qa', 'id': qa_session_id},
         mode='payment',
         success_url=success_url,
         cancel_url=cancel_url
@@ -1859,7 +1865,14 @@ def stripe_webhook(request):
                 return Response({'success': 'Successfully joined project'})
             else:
                 return Response({'error': f"Project with id {project_id} not found"})
+
         return Response({'error': json.dumps(payment_intent)})
+
+    if event.type == 'checkout.session.completed':
+        qa_session_id = data_object.metadata['id']
+        qa_session = QaSession.objects.get(surrogate=qa_session_id)
+        zoom_meeting_data = create_meeting(qa_session)
+        return Response({'url': zoom_meeting_data['url'], 'password': zoom_meeting_data['password']})
 
     if event.type == 'invoice.payment_failed':
         if data_object['billing_reason'] == 'subscription_create' or data_object['billing_reason'] == 'subscription_update':
@@ -1940,7 +1953,6 @@ def stripe_webhook(request):
     elif event.type == 'account.updated':
         charges_enabled = data_object.get('charges_enabled', '')
         coach = Coach.objects.get(stripe_id=data_object.get('id', ''))
-
         coach.charges_enabled = charges_enabled
         coach.save()
     else:
