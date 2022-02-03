@@ -740,7 +740,9 @@ def ask_question(request):
 @permission_classes((permissions.AllowAny,))
 def create_qa_checkout_session(request):
     qa_session_id = request.data.get('qa_session_id')
+    question_id = request.data.get('question_id')
     qa_session = QaSession.objects.get(surrogate=qa_session_id)
+    question = Question.objects.get(surrogate=question_id)
 
     if os.environ.get('DEBUG') == 'True':
         success_url = 'http://localhost:3000/checkout?status=success'
@@ -756,7 +758,7 @@ def create_qa_checkout_session(request):
                 'quantity': 1,
             },
         ],
-        metadata={'type': 'qa', 'id': qa_session_id},
+        metadata={'type': 'qa', 'id': qa_session_id, 'question_id': question_id},
         mode='payment',
         success_url=success_url,
         cancel_url=cancel_url
@@ -784,7 +786,13 @@ def check_available_coaches_for_question(request, question_id):
             # since the ranges are not really percise we leave a 1 hour buffer to be safe that
             # no questions overlap with each other
             # in case he is free during that time range we can add him to the available coaches
-            if not coach.assigned_questions.filter(delivery_time__range=[question.initial_delivery_time, one_hour_after_delivery_time_estimate]).exists():
+            
+            # the below query will extend over the coach's availability if the range window is small
+            # for example if user requests 60 minutes and coach is available during 7:00-7:20
+            # the query will be equal to false
+            is_coach_available_during_that_time = coach.available_time_ranges.filter(start_time__lte=question.initial_delivery_time, end_time__gte=question.initial_delivery_time).exists()
+            is_coach_booked_for_this_time = coach.assigned_questions.filter(delivery_time__range=[question.initial_delivery_time, one_hour_after_delivery_time_estimate]).exists()
+            if is_coach_available_during_that_time and not is_coach_booked_for_this_time:
                 available_coaches = available_coaches | _coach
         serializer = serializers.QuestionSerializer(question)
         coach_serializer = serializers.CoachSerializer(
@@ -1869,9 +1877,43 @@ def stripe_webhook(request):
         return Response({'error': json.dumps(payment_intent)})
 
     if event.type == 'checkout.session.completed':
-        qa_session_id = data_object.metadata['id']
-        qa_session = QaSession.objects.get(surrogate=qa_session_id)
+        checkout_session = stripe.checkout.Session.retrieve(
+                data_object['id'],
+                expand=['customer']
+            )
+        # get customer so we can send him an email with the zoom link
+        customer = checkout_session['customer']
+        qa_session_id = checkout_session['id']
+        qa_session = QaSession.objects.get(surrogate=data_object.metadata['id'])
+        question = Question.objects.get(surrogate=data_object.metadata['question_id'])
         zoom_meeting_data = create_meeting(qa_session)
+
+        # send email to the customer
+        send_mail(
+            f"Your zoom call with {qa_session.coach.name}",
+            f"""
+            Here is your zoom meeting:
+            Link: {zoom_meeting_data['url']}
+            Password: {zoom_meeting_data['password']}
+            """,
+            'beta@troosh.app',
+            [customer['email']],
+            fail_silently=False,
+        )
+
+        # send email to mentor
+        send_mail(
+            f"You got a zoom call coming up!",
+            f"""
+            Here is your zoom meeting with the following question "{question.body}"
+            Link: {zoom_meeting_data['url']}
+            Password: {zoom_meeting_data['password']}
+            """,
+            'beta@troosh.app',
+            [qa_session.coach.user.email],
+            fail_silently=False,
+        )
+
         return Response({'url': zoom_meeting_data['url'], 'password': zoom_meeting_data['password']})
 
     if event.type == 'invoice.payment_failed':
