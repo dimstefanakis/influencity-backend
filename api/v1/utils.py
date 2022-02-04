@@ -15,7 +15,15 @@ def extract_tags_from_question(question):
     nlu.set_service_url(url)
 
     # print("Successfully connected with the NLU service")
-    analysis = nlu.analyze(text=question, features=Features(classifications=ClassificationsOptions(model=model_id))).get_result()
+    try:
+        analysis = nlu.analyze(text=question, features=Features(classifications=ClassificationsOptions(model=model_id))).get_result()
+    except Exception as e:
+        return {
+            'tags': [],
+            'umbrella_term': '',
+            'is_weak': False,
+            'status': 'error'
+        }
     weak_results = False
     try:
         # model is not really optimized so anything above 0.3 should be good for now
@@ -27,14 +35,16 @@ def extract_tags_from_question(question):
         return {
             'tags': tags[:-1],
             'umbrella_term': umbrella_term,
-            'is_weak': weak_results
+            'is_weak': weak_results,
+            'status': 'success'
         }
     except Exception as e:
         print(e)
         return {
             'tags': [],
             'umbrella_term': '',
-            'is_weak': weak_results
+            'is_weak': weak_results,
+            'status': 'error'
         }
 
 

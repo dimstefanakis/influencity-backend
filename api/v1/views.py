@@ -770,14 +770,16 @@ def create_qa_checkout_session(request):
 @permission_classes((permissions.AllowAny,))
 def check_available_coaches_for_question(request, question_id):
     question = Question.objects.filter(surrogate=question_id).first()
-    if not question.answer_needed_now:
-        question_data = extract_tags_from_question(question.body)
-        # find expertise in tags
-        expertise = question_data['umbrella_term']
-        coaches = Coach.objects.filter(expertise_field__name__iexact=expertise).all()
-        available_coaches = Coach.objects.none()
-        for coach in coaches:
-            _coach = Coach.objects.filter(id=coach.id)
+    question_data = extract_tags_from_question(question.body)
+    # find expertise in tags
+    expertise = question_data['umbrella_term']
+    status = question_data['status']
+    coaches = Coach.objects.filter(expertise_field__name__iexact=expertise).all()
+    available_coaches = Coach.objects.none()
+    available_on_other_times = 0
+    for coach in coaches:
+        _coach = Coach.objects.filter(id=coach.id)
+        if not question.answer_needed_now:
             # get the 1 hour range at the time the user wants the answer
             one_hour_after_delivery_time_estimate = question.initial_delivery_time + \
                 datetime.timedelta(hours=1)
@@ -792,17 +794,21 @@ def check_available_coaches_for_question(request, question_id):
             # the query will be equal to false
             is_coach_available_during_that_time = coach.available_time_ranges.filter(start_time__lte=question.initial_delivery_time, end_time__gte=question.initial_delivery_time).exists()
             is_coach_booked_for_this_time = coach.assigned_questions.filter(delivery_time__range=[question.initial_delivery_time, one_hour_after_delivery_time_estimate]).exists()
+            if not is_coach_available_during_that_time:
+                available_on_other_times += 1
             if is_coach_available_during_that_time and not is_coach_booked_for_this_time:
                 available_coaches = available_coaches | _coach
+        else:
+            # create an invitation
+            # this sends an email to each coach and informs him that a question needs an answer now
+            # they can then accept or decline the request
+            QuestionInvitation.objects.create(question=question, coach=coach)
+            status = 'waiting_for_coaches'
         serializer = serializers.QuestionSerializer(question)
         coach_serializer = serializers.CoachSerializer(
             available_coaches, context={'request': request}, many=True)
-        return Response({'available_coaches': coach_serializer.data})
-
-    coaches = Coach.objects.all()
-    serializer = serializers.CoachSerializer(
-        coaches, context={'request': request}, many=True)
-    return Response({'available_coaches': serializer.data})
+        return Response({'available_coaches': coach_serializer.data, 'is_weak': question_data['is_weak'], 
+            'available_on_other_times': available_on_other_times, 'status': status})
 
 
 @api_view(http_method_names=['POST'])
