@@ -799,11 +799,23 @@ def check_available_coaches_for_question(request, question_id):
             if is_coach_available_during_that_time and not is_coach_booked_for_this_time:
                 available_coaches = available_coaches | _coach
         else:
-            # create an invitation
-            # this sends an email to each coach and informs him that a question needs an answer now
-            # they can then accept or decline the request
-            QuestionInvitation.objects.create(question=question, coach=coach)
-            status = 'waiting_for_coaches'
+            invitation = QuestionInvitation.objects.filter(question=question, coach=coach)
+            # Don't bother to send an invitation if the question is a hit or miss
+            if not question_data['is_weak']:
+                if not invitation.exists():
+                    # create an invitation
+                    # this sends an email to each coach and informs him that a question needs an answer now
+                    # they can then accept or decline the request
+                    QuestionInvitation.objects.create(question=question, coach=coach)
+                    status = 'waiting_for_mentors'
+                else:
+                    invitation = invitation.first()
+                    if invitation.status == QuestionInvitation.ACCEPTED:
+                        available_coaches = available_coaches | _coach
+                    elif invitation.status == QuestionInvitation.DECLINED:
+                        available_on_other_times += 1
+            else:
+                status = 'error'
         serializer = serializers.QuestionSerializer(question)
         coach_serializer = serializers.CoachSerializer(
             available_coaches, context={'request': request}, many=True)

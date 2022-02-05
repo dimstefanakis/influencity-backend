@@ -42,15 +42,33 @@ class Question(models.Model):
     body = models.TextField(blank=True, null=True)
 
     def __str__(self):
-        return self.body
+        return self.body or ''
 
 
 class QuestionInvitation(models.Model):
+    PENDING = 'PD'
+    ACCEPTED = 'AC'
+    DECLINED = 'DC'
+    STATUSES = [
+        (PENDING, 'Pending'),
+        (ACCEPTED, 'Accepted'),
+        (DECLINED, 'Declined'),
+    ]
+
+    status = models.CharField(
+        max_length=2,
+        choices=STATUSES,
+        default=PENDING,
+    )
+
     surrogate = models.UUIDField(default=uuid.uuid4, db_index=True)
     created = models.DateTimeField(auto_now_add=True, null=True, blank=True)
     updated = models.DateTimeField(auto_now=True, null=True, blank=True)
     question = models.ForeignKey(Question, blank=True, null=True, on_delete=models.CASCADE, related_name="invitations")
     coach = models.ForeignKey(Coach, blank=True, null=True, on_delete=models.CASCADE, related_name="invitations")
+
+    def __str__(self):
+        return f"{self.coach.name} - {self.question}"
 
 
 class QaSession(models.Model):
