@@ -35,6 +35,13 @@ router.register(r'expertise_fields', views.ExpertiseViewSet)
 router.register(r'my_coupons', views.MyCouponsViewSet, basename="my_coupons")
 router.register(r'my_tiers', views.MyTiersViewSet, basename="my_tiers")
 router.register(r'my_teams', views.MyTeamsViewSet, basename="my_teams")
+router.register(r'my_qa_invitations', views.MyQAInvitationsViewSet, basename="my_qa_invitations")
+router.register(r'my_assigned_questions',
+                views.MyAssignedQuestions, basename="my_assigned_questions")
+router.register(r'my_upcoming_questions',
+                views.MyUpcomingQuestions, basename="my_upcoming_questions")
+router.register(r'my_archived_questions',
+                views.MyArchivedQuestions, basename="my_archived_questions")
 router.register(r'reacts', views.ReactsViewSet)
 router.register(r'notifications', views.NotificationsViewSet, basename="notifications")
 router.register(r'my_chat_rooms/(?P<surrogate>[0-9a-f-]+)/messages', views.RoomMessagesViewSet,
@@ -67,14 +74,21 @@ urlpatterns = [
     path('v1/upload_milestonecompletion_video/', views.upload_milestonecompletion_video, name="upload_milestonecompletion_video"),
     path('v1/webhooks/upload_video_webhook/', views.upload_video_webhook, name="webhooks_upload_video"),
     path('v1/webhooks/stripe/', views.stripe_webhook, name="stripe_webhook"),
-    path('v1/create_stripe_account_link/', views.create_stripe_account_link, name="create_stripe_account_link"),
-    path('v1/get_stripe_balance/', views.get_stripe_balance, name="get_stripe_balance"),
+    path('v1/create_stripe_account_link/',
+         views.create_stripe_account_link, name="create_stripe_account_link"),
+    path('v1/create_stripe_account_link_qa/',
+         views.create_stripe_account_link_qa, name="create_stripe_account_link_qa"),
+    path('v1/get_stripe_balance/', views.get_stripe_balance,
+         name="get_stripe_balance"),
     path('v1/get_stripe_login_link/', views.get_stripe_login, name="get_stripe_login_link"),
     path('v1/posts/<uuid:id>/change_react/', views.change_or_delete_react, name="change_or_delete_react"),
     path('v1/comment/<uuid:id>/change_react/', views.change_or_delete_comment_react, name="change_or_delete_comment_react"),
     path('v1/milestone_report/<uuid:milestone_report_id>/update/', views.update_milestone_report_from_task_id, name="update_milestone_report_from_task_id"),
     path('v1/select_expertise/', views.select_expertise, name="select_expertise"),
     path('v1/ask_question/', views.ask_question, name="ask_question"),
+    path('v1/respond_to_invitation/<uuid:invitation_id>/', views.respond_to_qa_invitation, name="respond_to_qa_invitation"),
+    path('v1/accept_invitation/<uuid:invitation_id>/',
+         views.accept_qa_invitation, name="accept_invitation"),
     path('v1/create_qa_checkout_session/',
          views.create_qa_checkout_session, name="create_qa_checkout_session"),
     path('v1/check_available_coaches_for_question/<uuid:question_id>/',

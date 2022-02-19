@@ -148,7 +148,8 @@ class CoachSerializer(serializers.ModelSerializer):
     class Meta:
         model = Coach
         fields = ['name', 'avatar', 'bio', 'expertise_field', 'projects', 'number_of_projects_joined',
-                  'tier', 'tier_full', 'tiers', 'qa_sessions', 'available_time_ranges', 'common_questions', 'surrogate', 'charges_enabled', 'coupon', 'seen_welcome_page', 'submitted_expertise']
+                  'tier', 'tier_full', 'tiers', 'qa_sessions', 'available_time_ranges', 'common_questions', 'surrogate', 
+                  'charges_enabled', 'coupon', 'seen_welcome_page', 'submitted_expertise', 'qa_session_credit']
 
 
 class CoachApplicationSerializer(serializers.ModelSerializer):

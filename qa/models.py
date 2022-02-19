@@ -1,6 +1,7 @@
 from django.dispatch import receiver
 from django.db import models
 from django.db.models.signals import pre_save, post_save
+from django.core.mail import send_mail
 from djmoney.models.fields import MoneyField
 from instructor.models import Coach
 import uuid
@@ -41,6 +42,9 @@ class Question(models.Model):
         Coach, blank=True, null=True, on_delete=models.CASCADE, related_name="assigned_questions")
     body = models.TextField(blank=True, null=True)
 
+    zoom_link = models.URLField(null=True, blank=True)
+    zoom_password = models.CharField(max_length=50, null=True, blank=True)
+
     def __str__(self):
         return self.body or ''
 
@@ -64,8 +68,10 @@ class QuestionInvitation(models.Model):
     surrogate = models.UUIDField(default=uuid.uuid4, db_index=True)
     created = models.DateTimeField(auto_now_add=True, null=True, blank=True)
     updated = models.DateTimeField(auto_now=True, null=True, blank=True)
-    question = models.ForeignKey(Question, blank=True, null=True, on_delete=models.CASCADE, related_name="invitations")
-    coach = models.ForeignKey(Coach, blank=True, null=True, on_delete=models.CASCADE, related_name="invitations")
+    question = models.ForeignKey(
+        Question, blank=True, null=True, on_delete=models.CASCADE, related_name="invitations")
+    coach = models.ForeignKey(Coach, blank=True, null=True,
+                              on_delete=models.CASCADE, related_name="invitations")
 
     def __str__(self):
         return f"{self.coach.name} - {self.question}"
@@ -73,9 +79,12 @@ class QuestionInvitation(models.Model):
 
 class QaSession(models.Model):
     surrogate = models.UUIDField(default=uuid.uuid4, db_index=True)
-    coach = models.ForeignKey(Coach, blank=True, null=True, on_delete=models.CASCADE, related_name="qa_sessions")
-    minutes = models.PositiveSmallIntegerField(default=15, blank=False, null=False)
-    credit = MoneyField(max_digits=7, decimal_places=2, default_currency='EUR', default=15, null=True, blank=True)
+    coach = models.ForeignKey(Coach, blank=True, null=True,
+                              on_delete=models.CASCADE, related_name="qa_sessions")
+    minutes = models.PositiveSmallIntegerField(
+        default=15, blank=False, null=False)
+    credit = MoneyField(max_digits=7, decimal_places=2,
+                        default_currency='EUR', default=15, null=True, blank=True)
     product_id = models.CharField(max_length=50, null=True, blank=True)
     price_id = models.CharField(max_length=50, null=True, blank=True)
 
@@ -89,8 +98,8 @@ class QaSession(models.Model):
             self.product_id = product.id
         else:
             pass
-        
-        if not self.price_id: 
+
+        if not self.price_id:
             price = create_stripe_price(self)
             self.price_id = price.id
         return super().save()
@@ -108,15 +117,37 @@ class AvailableTimeRange(models.Model):
     ]
 
     weekday = models.IntegerField(choices=WEEKDAYS)
-    coach = models.ForeignKey(Coach, on_delete=models.CASCADE, related_name="available_time_ranges")
+    coach = models.ForeignKey(
+        Coach, on_delete=models.CASCADE, related_name="available_time_ranges")
     start_time = models.TimeField()
     end_time = models.TimeField()
 
 
 class CommonQuestion(models.Model):
     surrogate = models.UUIDField(default=uuid.uuid4, db_index=True)
-    coach = models.ForeignKey(Coach, on_delete=models.CASCADE, related_name="common_questions")
+    coach = models.ForeignKey(
+        Coach, on_delete=models.CASCADE, related_name="common_questions")
     body = models.TextField()
+
+
+@receiver(post_save, sender=QuestionInvitation)
+def question_invitation_created(sender, instance, created, *args, **kwargs):
+    if created:
+        send_mail(
+            f"Someone needs your expertise!",
+            f"""
+            A person needs an answer for this question:
+            {instance.question.body}
+
+            Click here to notify the user that you are available to answer this questions: 
+            https://questions.troosh.app/?qiid={instance.surrogate}&accept=true
+
+            Note that the user ultimately decides if they want to book a call with you!
+            """,
+            'beta@troosh.app',
+            [instance.coach.user.email],
+            fail_silently=False,
+        )
 
 
 @receiver(pre_save, sender=QaSession)

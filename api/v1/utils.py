@@ -1,3 +1,4 @@
+from tracemalloc import start
 from ibm_watson import NaturalLanguageUnderstandingV1
 from ibm_cloud_sdk_core.authenticators import IAMAuthenticator
 from ibm_watson.natural_language_understanding_v1 import Features, ClassificationsOptions, CategoriesOptions, KeywordsOptions
@@ -48,11 +49,11 @@ def extract_tags_from_question(question):
         }
 
 
-def create_meeting(qa_session):
+def create_meeting(start_time, duration):
     meetingdetails = {"topic": "The title of your zoom meeting",
                   "type": 2,
-                  "start_time": "2022-06-14T10: 21: 57",
-                  "duration": "45",
+                  "start_time": start_time,
+                  "duration": str(duration),
                   "timezone": "Europe/Madrid",
                   "agenda": "test",
  

@@ -1,3 +1,4 @@
+from cmath import exp
 import os
 from collections import OrderedDict
 from django.core.exceptions import ObjectDoesNotExist
@@ -683,6 +684,40 @@ class MyAwardsViewSet(viewsets.GenericViewSet, mixins.ListModelMixin):
         return subscriber.awards.all()
 
 
+class MyQAInvitationsViewSet(viewsets.ModelViewSet):
+    serializer_class = serializers.QuestionInvitationSerializer
+    permission_classes = [permissions.IsAuthenticated, IsCoach]
+
+    def get_queryset(self):
+        return self.request.user.coach.invitations.all()
+
+
+class MyAssignedQuestions(viewsets.ModelViewSet):
+    serializer_class = serializers.QuestionSerializer
+    permission_classes = [permissions.IsAuthenticated, IsCoach]
+
+    def get_queryset(self):
+        return self.request.user.coach.assigned_questions.all()
+
+
+class MyUpcomingQuestions(viewsets.ModelViewSet):
+    serializer_class = serializers.QuestionSerializer
+    permission_classes = [permissions.IsAuthenticated, IsCoach]
+
+    def get_queryset(self):
+        now = datetime.datetime.now()
+        return self.request.user.coach.assigned_questions.filter(initial_delivery_time__gte=now)
+
+
+class MyArchivedQuestions(viewsets.ModelViewSet):
+    serializer_class = serializers.QuestionSerializer
+    permission_classes = [permissions.IsAuthenticated, IsCoach]
+
+    def get_queryset(self):
+        now = datetime.datetime.now()
+        return self.request.user.coach.assigned_questions.filter(initial_delivery_time__lte=now)
+
+
 class NotificationsViewSet(viewsets.ModelViewSet):
     queryset = Notification.objects.all()
     serializer_class = serializers.NotificationSerializer
@@ -743,6 +778,7 @@ def create_qa_checkout_session(request):
     question_id = request.data.get('question_id')
     qa_session = QaSession.objects.get(surrogate=qa_session_id)
     question = Question.objects.get(surrogate=question_id)
+    price = stripe.Price.retrieve(qa_session.price_id)
 
     if os.environ.get('DEBUG') == 'True':
         success_url = 'http://localhost:3000/checkout?status=success'
@@ -758,8 +794,15 @@ def create_qa_checkout_session(request):
                 'quantity': 1,
             },
         ],
-        metadata={'type': 'qa', 'id': qa_session_id, 'question_id': question_id},
+        metadata={'type': 'qa', 'id': qa_session_id,
+                  'question_id': question_id},
         mode='payment',
+        payment_intent_data={
+            'application_fee_amount': int(price.unit_amount * 0.2),
+            'transfer_data': {
+                'destination': qa_session.coach.stripe_id,
+            },
+        },
         success_url=success_url,
         cancel_url=cancel_url
     )
@@ -771,10 +814,22 @@ def create_qa_checkout_session(request):
 def check_available_coaches_for_question(request, question_id):
     question = Question.objects.filter(surrogate=question_id).first()
     question_data = extract_tags_from_question(question.body)
-    # find expertise in tags
-    expertise = question_data['umbrella_term']
+    # let user be able to filter mentors based on their expertise
+    expertise = request.query_params.get('expertise')
+    enforced_expertise = True
+    is_weak = question_data['is_weak']
+    
+    if not expertise:
+        expertise = question_data['umbrella_term']
+        enforced_expertise = False
+    # if user enforced the expertise then don't mark results as weak
+    # since we don't rely on the ml model to find the mentors
+    if enforced_expertise:
+        is_weak = False
+
     status = question_data['status']
-    coaches = Coach.objects.filter(expertise_field__name__iexact=expertise).all()
+    coaches = Coach.objects.filter(
+        expertise_field__name__iexact=expertise).all()
     available_coaches = Coach.objects.none()
     available_on_other_times = 0
     for coach in coaches:
@@ -788,25 +843,29 @@ def check_available_coaches_for_question(request, question_id):
             # since the ranges are not really percise we leave a 1 hour buffer to be safe that
             # no questions overlap with each other
             # in case he is free during that time range we can add him to the available coaches
-            
+
             # the below query will extend over the coach's availability if the range window is small
             # for example if user requests 60 minutes and coach is available during 7:00-7:20
             # the query will be equal to false
-            is_coach_available_during_that_time = coach.available_time_ranges.filter(start_time__lte=question.initial_delivery_time, end_time__gte=question.initial_delivery_time).exists()
-            is_coach_booked_for_this_time = coach.assigned_questions.filter(delivery_time__range=[question.initial_delivery_time, one_hour_after_delivery_time_estimate]).exists()
+            is_coach_available_during_that_time = coach.available_time_ranges.filter(
+                start_time__lte=question.initial_delivery_time, end_time__gte=question.initial_delivery_time).exists()
+            is_coach_booked_for_this_time = coach.assigned_questions.filter(delivery_time__range=[
+                                                                            question.initial_delivery_time, one_hour_after_delivery_time_estimate]).exists()
             if not is_coach_available_during_that_time:
                 available_on_other_times += 1
             if is_coach_available_during_that_time and not is_coach_booked_for_this_time:
                 available_coaches = available_coaches | _coach
         else:
-            invitation = QuestionInvitation.objects.filter(question=question, coach=coach)
+            invitation = QuestionInvitation.objects.filter(
+                question=question, coach=coach)
             # Don't bother to send an invitation if the question is a hit or miss
-            if not question_data['is_weak']:
+            if not is_weak:
                 if not invitation.exists():
                     # create an invitation
                     # this sends an email to each coach and informs him that a question needs an answer now
                     # they can then accept or decline the request
-                    QuestionInvitation.objects.create(question=question, coach=coach)
+                    QuestionInvitation.objects.create(
+                        question=question, coach=coach)
                     status = 'waiting_for_mentors'
                 else:
                     invitation = invitation.first()
@@ -819,12 +878,43 @@ def check_available_coaches_for_question(request, question_id):
         serializer = serializers.QuestionSerializer(question)
         coach_serializer = serializers.CoachSerializer(
             available_coaches, context={'request': request}, many=True)
-        return Response({'available_coaches': coach_serializer.data, 'is_weak': question_data['is_weak'], 
-            'available_on_other_times': available_on_other_times, 'status': status})
+        return Response({'available_coaches': coach_serializer.data, 'is_weak': is_weak, 'expertise': expertise,
+                         'available_on_other_times': available_on_other_times, 'status': status})
 
 
 @api_view(http_method_names=['POST'])
-@permission_classes((permissions.IsAuthenticated,))
+@permission_classes((permissions.IsAuthenticated, IsCoach))
+def respond_to_qa_invitation(request, invitation_id):
+    coach = request.user.coach
+    qa_invitation = QuestionInvitation.objects.filter(
+        surrogate=invitation_id).first()
+    response = request.data.get('response')
+    if qa_invitation:
+        if response == QuestionInvitation.ACCEPTED:
+            qa_invitation.status = QuestionInvitation.ACCEPTED
+        else:
+            qa_invitation.status = QuestionInvitation.DECLINED
+        qa_invitation.save()
+        return Response({'status': 'ok'})
+    else:
+        return Response({'status': 'not found'})
+
+
+# Allow anyone to do this so the mentor can accept without logging in
+# He should be the only one to have this id anyways
+@api_view(http_method_names=['POST'])
+@permission_classes((permissions.AllowAny, ))
+def accept_qa_invitation(request, invitation_id):
+    qa_invitation = QuestionInvitation.objects.filter(
+        surrogate=invitation_id).first()
+    if qa_invitation:
+        qa_invitation.status = QuestionInvitation.ACCEPTED
+        return Response({'status': 'ok'})
+    return Response({'status': 'an unexpected error occured'})
+
+
+@api_view(http_method_names=['POST'])
+@permission_classes((permissions.IsAuthenticated, IsCoach))
 def change_common_questions(request):
     coach = request.user.coach
     common_questions = request.data
@@ -836,7 +926,7 @@ def change_common_questions(request):
 
 
 @api_view(http_method_names=['POST'])
-@permission_classes((permissions.IsAuthenticated,))
+@permission_classes((permissions.IsAuthenticated, IsCoach))
 def change_coach_qa_availability(request):
     coach = request.user.coach
     availability_ranges = request.data.get('availability_ranges')
@@ -849,9 +939,10 @@ def change_coach_qa_availability(request):
             start_time_minutes = int(time_range['start_time'][3:5])
             end_time_hour = int(time_range['end_time'][:2])
             end_time_minutes = int(time_range['end_time'][3:5])
-            AvailableTimeRange.objects.create(weekday=weekday, coach=coach, 
-                start_time=datetime.time(hour=start_time_hour, minute=start_time_minutes), 
-                end_time=datetime.time(hour=end_time_hour, minute=end_time_minutes))
+            AvailableTimeRange.objects.create(weekday=weekday, coach=coach,
+                                              start_time=datetime.time(
+                                                  hour=start_time_hour, minute=start_time_minutes),
+                                              end_time=datetime.time(hour=end_time_hour, minute=end_time_minutes))
     return Response({'status': 'ok'})
 
 
@@ -1819,6 +1910,29 @@ def create_stripe_account_link(request):
 
 @api_view(http_method_names=['GET'])
 @permission_classes((permissions.IsAuthenticated,))
+def create_stripe_account_link_qa(request):
+    stripe.api_key = os.environ.get('STRIPE_SECRET_KEY')
+    coach = request.user.coach
+
+    redirect = 'https://questions.troosh.app/users/oauth/callback'
+    refresh_url = 'https://questions.troosh.app/reauth'
+
+    account_link = stripe.AccountLink.create(
+        account=request.user.coach.stripe_id,
+        refresh_url=refresh_url,
+        return_url=redirect,
+        type="account_onboarding",
+    )
+
+    coach.stripe_account_link = account_link.url
+    coach.stripe_created = account_link.created
+    coach.stripe_expires_at = account_link.expires_at
+    coach.save()
+    return Response({'url': account_link.url})
+
+
+@api_view(http_method_names=['GET'])
+@permission_classes((permissions.IsAuthenticated,))
 def get_stripe_balance(request):
     balance = stripe.Balance.retrieve(
         stripe_account=request.user.coach.stripe_id
@@ -1896,21 +2010,29 @@ def stripe_webhook(request):
 
     if event.type == 'checkout.session.completed':
         checkout_session = stripe.checkout.Session.retrieve(
-                data_object['id'],
-                expand=['customer']
-            )
+            data_object['id'],
+            expand=['customer']
+        )
         # get customer so we can send him an email with the zoom link
         customer = checkout_session['customer']
-        qa_session_id = checkout_session['id']
-        qa_session = QaSession.objects.get(surrogate=data_object.metadata['id'])
-        question = Question.objects.get(surrogate=data_object.metadata['question_id'])
-        zoom_meeting_data = create_meeting(qa_session)
+        qa_session = QaSession.objects.get(
+            surrogate=data_object.metadata['id'])
+        question = Question.objects.get(
+            surrogate=data_object.metadata['question_id'])
+        zoom_end_time = question.initial_delivery_time + \
+            datetime.timedelta(minutes=int(qa_session.minutes))
+        question.delivery_time = zoom_end_time
+        question.delivered_by = qa_session.coach
+        question.save()
+        zoom_meeting_data = create_meeting(
+            question.initial_delivery_time, qa_session.minutes)
 
         # send email to the customer
         send_mail(
             f"Your zoom call with {qa_session.coach.name}",
             f"""
             Here is your zoom meeting:
+
             Link: {zoom_meeting_data['url']}
             Password: {zoom_meeting_data['password']}
             """,
@@ -1923,7 +2045,9 @@ def stripe_webhook(request):
         send_mail(
             f"You got a zoom call coming up!",
             f"""
-            Here is your zoom meeting with the following question "{question.body}"
+            Here is your zoom meeting with the following question: 
+            "{question.body}"
+
             Link: {zoom_meeting_data['url']}
             Password: {zoom_meeting_data['password']}
             """,
