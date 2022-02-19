@@ -1,7 +1,7 @@
 from django.db import models
 from django.db.models.signals import m2m_changed, post_save
 from django.dispatch import receiver
-from push_notifications.models import APNSDevice, GCMDevice
+# from push_notifications.models import APNSDevice, GCMDevice
 from notifications.signals import notify
 from asgiref.sync import async_to_sync
 import channels.layers
@@ -90,23 +90,23 @@ def message_created(sender, instance, created, **kwargs):
         #         for device in [*gcm_devices, *apns_devices]:
         #             device.send_message(message={"title" : instance.chat_room.project.name, "body" : f"{instance.user.subscriber.name} mentioned you"})
 
-        for mention in mentions:
-            user_id = mention[1:]
-            subscriber = Subscriber.objects.filter(surrogate=user_id)
+        # for mention in mentions:
+        #     user_id = mention[1:]
+        #     subscriber = Subscriber.objects.filter(surrogate=user_id)
 
-            if subscriber.exists():
-                notification_data = notify.send(instance.user, recipient=subscriber.first().user, 
-                                                verb='mentioned you', action_object=instance.chat_room)
+        #     if subscriber.exists():
+        #         notification_data = notify.send(instance.user, recipient=subscriber.first().user, 
+        #                                         verb='mentioned you', action_object=instance.chat_room)
 
-                notification = notification_data[0][1][0]
-                async_to_sync(channel_layer.group_send)(
-                    f"{str(subscriber.first().user.surrogate)}.notifications.group",
-                    {
-                        'type': 'send.notification',
-                        'id': notification.id
-                    }
-                )
-                gcm_devices = GCMDevice.objects.filter(user=subscriber.first().user).all()
-                apns_devices = APNSDevice.objects.filter(user=subscriber.first().user).all()
-                for device in [*gcm_devices, *apns_devices]:
-                    device.send_message(message={"title" : instance.chat_room.project.name, "body" : f"{instance.user.subscriber.name} mentioned you"})
+        #         notification = notification_data[0][1][0]
+        #         async_to_sync(channel_layer.group_send)(
+        #             f"{str(subscriber.first().user.surrogate)}.notifications.group",
+        #             {
+        #                 'type': 'send.notification',
+        #                 'id': notification.id
+        #             }
+        #         )
+        #         gcm_devices = GCMDevice.objects.filter(user=subscriber.first().user).all()
+        #         apns_devices = APNSDevice.objects.filter(user=subscriber.first().user).all()
+        #         for device in [*gcm_devices, *apns_devices]:
+        #             device.send_message(message={"title" : instance.chat_room.project.name, "body" : f"{instance.user.subscriber.name} mentioned you"})

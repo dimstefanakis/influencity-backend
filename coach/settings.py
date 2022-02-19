@@ -88,7 +88,7 @@ INSTALLED_APPS = [
     'rest_auth',
     'rest_auth.registration',
     'notifications',
-    'push_notifications',
+    # 'push_notifications',
     'drf_yasg',
     'smart_selects',
     'djmoney',
@@ -240,12 +240,12 @@ REST_FRAMEWORK = {
     )
 }
 
-PUSH_NOTIFICATIONS_SETTINGS = {
-    "FCM_API_KEY": os.environ.get('FCM_API_KEY'),
-    # "GCM_API_KEY": "[your api key]",
-    "APNS_CERTIFICATE": "../apns-dev.pem",
-    "APNS_TOPIC": "org.reactjs.native.example.influencity",
-}
+# PUSH_NOTIFICATIONS_SETTINGS = {
+#     "FCM_API_KEY": os.environ.get('FCM_API_KEY'),
+#     # "GCM_API_KEY": "[your api key]",
+#     "APNS_CERTIFICATE": "../apns-dev.pem",
+#     "APNS_TOPIC": "org.reactjs.native.example.influencity",
+# }
 
 # Internationalization
 # https://docs.djangoproject.com/en/3.0/topics/i18n/
