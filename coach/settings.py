@@ -62,6 +62,7 @@ DEFAULT_FILE_STORAGE = 'coach.storage_backends.MediaStorage'
 CORS_ALLOWED_ORIGINS = [
     "https://troosh.app",
     "https://api.troosh.app",
+    "https://questions.troosh.app",
     "http://localhost:8000",
     "http://localhost:3000",
     "https://748f-2a02-587-4503-483b-2dbb-5ec6-ca58-99d4.ngrok.io",
