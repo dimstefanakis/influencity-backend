@@ -876,10 +876,10 @@ def check_available_coaches_for_question(request, question_id):
             else:
                 status = 'error'
         serializer = serializers.QuestionSerializer(question)
-        coach_serializer = serializers.CoachSerializer(
-            available_coaches, context={'request': request}, many=True)
-        return Response({'available_coaches': coach_serializer.data, 'is_weak': is_weak, 'expertise': expertise,
-                         'available_on_other_times': available_on_other_times, 'status': status})
+    coach_serializer = serializers.CoachSerializer(
+        available_coaches, context={'request': request}, many=True)
+    return Response({'available_coaches': coach_serializer.data, 'is_weak': is_weak, 'expertise': expertise,
+                        'available_on_other_times': available_on_other_times, 'status': status})
 
 
 @api_view(http_method_names=['POST'])
