@@ -848,7 +848,7 @@ def check_available_coaches_for_question(request, question_id):
             # for example if user requests 60 minutes and coach is available during 7:00-7:20
             # the query will be equal to false
             is_coach_available_during_that_time = coach.available_time_ranges.filter(
-                start_time__lte=question.initial_delivery_time, end_time__gte=question.initial_delivery_time).exists()
+                start_time__lte=question.initial_delivery_time.time(), end_time__gte=question.initial_delivery_time.time()).exists()
             is_coach_booked_for_this_time = coach.assigned_questions.filter(delivery_time__range=[
                                                                             question.initial_delivery_time, one_hour_after_delivery_time_estimate]).exists()
             if not is_coach_available_during_that_time:
