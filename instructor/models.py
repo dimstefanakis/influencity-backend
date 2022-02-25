@@ -31,7 +31,7 @@ class Coach(CommonUser):
     avatar = models.ForeignKey(CoachAvatar, on_delete=models.CASCADE, null=True, blank=True, related_name="coach")
     subscribers = models.ManyToManyField(User, null=True, blank=True, related_name="coaches")
     expertise_field = models.ForeignKey(ExpertiseField, on_delete=models.CASCADE, null=True)
-    bio = models.CharField(max_length=160, blank=True, null=True)
+    bio = models.TextField(max_length=240, blank=True, null=True)
     seen_welcome_page = models.BooleanField(default=False)
     submitted_expertise = models.BooleanField(default=False)
     # This is the session price for 30 minutes, defaults to 15 eur per 30 minutes
