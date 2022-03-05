@@ -17,6 +17,15 @@ class ExpertiseField(models.Model):
         return str(self.name)
 
 
+class ExpertiseFieldMultiple(models.Model):
+    name = models.CharField(max_length=100)
+    coach = models.ForeignKey(
+        'instructor.Coach', on_delete=models.CASCADE, null=True, blank=True, related_name="expertise_fields")
+
+    def __str__(self):
+        return str(self.name)
+
+
 class ExpertiseFieldAvatar(CommonImage):
     expertise_field = models.OneToOneField(ExpertiseField, blank=True, null=True,
                                            on_delete=models.CASCADE, related_name="avatar")

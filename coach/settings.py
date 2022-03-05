@@ -58,6 +58,7 @@ AWS_S3_OBJECT_PARAMETERS = {
 }
 AWS_LOCATION = 'static'
 DEFAULT_FILE_STORAGE = 'coach.storage_backends.MediaStorage'
+TAGGIT_CASE_INSENSITIVE = True
 
 CORS_ALLOWED_ORIGINS = [
     "https://troosh.app",

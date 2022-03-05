@@ -737,7 +737,7 @@ class NotificationsViewSet(viewsets.ModelViewSet):
 @permission_classes((permissions.AllowAny,))
 def ask_question(request):
     '''
-    Logic here should maybe extracted to just question creation
+    Logic here should may be extracted to just question creation
     '''
     question_body = request.data.get('body')
     when = request.data.get('when')
@@ -818,7 +818,7 @@ def check_available_coaches_for_question(request, question_id):
     expertise = request.query_params.get('expertise')
     enforced_expertise = True
     is_weak = question_data['is_weak']
-    
+
     if not expertise:
         expertise = question_data['umbrella_term']
         enforced_expertise = False
@@ -829,7 +829,7 @@ def check_available_coaches_for_question(request, question_id):
 
     status = question_data['status']
     coaches = Coach.objects.filter(
-        expertise_field__name__iexact=expertise).all()
+        expertise_fields__name__iexact=expertise).all()
     available_coaches = Coach.objects.none()
     available_on_other_times = 0
     for coach in coaches:
@@ -879,7 +879,7 @@ def check_available_coaches_for_question(request, question_id):
     coach_serializer = serializers.CoachSerializer(
         available_coaches, context={'request': request}, many=True)
     return Response({'available_coaches': coach_serializer.data, 'is_weak': is_weak, 'expertise': expertise,
-                        'available_on_other_times': available_on_other_times, 'status': status})
+                     'available_on_other_times': available_on_other_times, 'status': status})
 
 
 @api_view(http_method_names=['POST'])
@@ -2025,7 +2025,7 @@ def stripe_webhook(request):
         question.delivered_by = qa_session.coach
         question.save()
         zoom_meeting_data = create_meeting(
-            question.initial_delivery_time, qa_session.minutes)
+            question.initial_delivery_time, qa_session.minutes, qa_session.coach)
 
         # send email to the customer
         send_mail(

@@ -10,14 +10,17 @@ api_key = os.environ.get('WATSON_KEY')
 url = os.environ.get('WATSON_URL')
 model_id = os.environ.get('WATSON_MODEL_ID')
 
+
 def extract_tags_from_question(question):
     auth = IAMAuthenticator(api_key)
-    nlu = NaturalLanguageUnderstandingV1(version='2021-03-25', authenticator=auth)
+    nlu = NaturalLanguageUnderstandingV1(
+        version='2021-03-25', authenticator=auth)
     nlu.set_service_url(url)
 
     # print("Successfully connected with the NLU service")
     try:
-        analysis = nlu.analyze(text=question, features=Features(classifications=ClassificationsOptions(model=model_id))).get_result()
+        analysis = nlu.analyze(text=question, features=Features(
+            classifications=ClassificationsOptions(model=model_id))).get_result()
     except Exception as e:
         return {
             'tags': [],
@@ -48,41 +51,41 @@ def extract_tags_from_question(question):
             'status': 'error'
         }
 
+# Europe/London is GMT timezone equal to UTC that server uses
+def create_meeting(start_time, duration, coach):
+    meetingdetails = {"topic": "Troosh QA session",
+                      "type": 2,
+                      "start_time": start_time,
+                      "duration": str(duration),
+                      "timezone": "Europe/London",
+                      "agenda": f"Your debug session with {coach.name} is coming right up!",
 
-def create_meeting(start_time, duration):
-    meetingdetails = {"topic": "The title of your zoom meeting",
-                  "type": 2,
-                  "start_time": start_time,
-                  "duration": str(duration),
-                  "timezone": "Europe/Madrid",
-                  "agenda": "test",
- 
-                  "recurrence": {"type": 1,
-                                 "repeat_interval": 1
-                                 },
-                  "settings": {"host_video": "true",
-                               "participant_video": "true",
-                               "join_before_host": "False",
-                               "mute_upon_entry": "False",
-                               "watermark": "true",
-                               "audio": "voip",
-                               "auto_recording": "cloud"
-                               }
-                  }
+                      "recurrence": {"type": 1,
+                                     "repeat_interval": 1
+                                     },
+                      "settings": {"host_video": "true",
+                                   "participant_video": "true",
+                                   "join_before_host": "False",
+                                   "mute_upon_entry": "False",
+                                   "watermark": "true",
+                                   "audio": "voip",
+                                   "auto_recording": "cloud"
+                                   }
+                      }
 
     headers = {'authorization': 'Bearer ' + os.environ.get('ZOOM_JWT'),
-            'content-type': 'application/json'}
+               'content-type': 'application/json'}
     r = requests.post(
         f'https://api.zoom.us/v2/users/me/meetings',
         headers=headers, data=json.dumps(meetingdetails))
- 
+
     print("\n creating zoom meeting ... \n")
     # print(r.text)
     # converting the output into json and extracting the details
     y = json.loads(r.text)
     join_URL = y["join_url"]
     meetingPassword = y["password"]
- 
+
     print(
         f'\n here is your zoom meeting link {join_URL} and your \
         password: "{meetingPassword}"\n')

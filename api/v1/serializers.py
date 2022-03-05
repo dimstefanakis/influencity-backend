@@ -60,6 +60,7 @@ class AvailableTimeRangeSerializer(serializers.ModelSerializer):
 
 class CoachSerializer(serializers.ModelSerializer):
     expertise_field = serializers.StringRelatedField()
+    expertise_fields = serializers.SerializerMethodField()
     avatar = serializers.SerializerMethodField()
     projects = serializers.SerializerMethodField()
     tier = serializers.SerializerMethodField()
@@ -129,6 +130,8 @@ class CoachSerializer(serializers.ModelSerializer):
         }
         return AvailableTimeRangeSerializer(coach.available_time_ranges.all(), many=True, context=context).data
 
+    def get_expertise_fields(self, coach):
+        return [expertise_field.name for expertise_field in coach.expertise_fields.all()]
 
     # get number of projects the user has subscribed to for this coach
     # this is used for frontend validation because Tier 1 subscribers only have access to one project
@@ -147,7 +150,7 @@ class CoachSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Coach
-        fields = ['name', 'avatar', 'bio', 'expertise_field', 'projects', 'number_of_projects_joined',
+        fields = ['name', 'avatar', 'bio', 'expertise_field', 'expertise_fields', 'projects', 'number_of_projects_joined',
                   'tier', 'tier_full', 'tiers', 'qa_sessions', 'available_time_ranges', 'common_questions', 'surrogate', 
                   'charges_enabled', 'coupon', 'seen_welcome_page', 'submitted_expertise', 'qa_session_credit']
 

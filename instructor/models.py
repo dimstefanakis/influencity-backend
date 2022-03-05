@@ -9,6 +9,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
 from django.core.exceptions import ObjectDoesNotExist
+from taggit.managers import TaggableManager
 from djmoney.models.fields import MoneyField
 from accounts.models import User
 from subscribers.models import Subscriber
@@ -31,6 +32,7 @@ class Coach(CommonUser):
     avatar = models.ForeignKey(CoachAvatar, on_delete=models.CASCADE, null=True, blank=True, related_name="coach")
     subscribers = models.ManyToManyField(User, null=True, blank=True, related_name="coaches")
     expertise_field = models.ForeignKey(ExpertiseField, on_delete=models.CASCADE, null=True)
+    # expertise_fields_tags = TaggableManager()
     bio = models.TextField(max_length=240, blank=True, null=True)
     seen_welcome_page = models.BooleanField(default=False)
     submitted_expertise = models.BooleanField(default=False)
