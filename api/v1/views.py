@@ -2006,7 +2006,7 @@ def stripe_webhook(request):
             else:
                 return Response({'error': f"Project with id {project_id} not found"})
 
-        return Response({'error': json.dumps(payment_intent)})
+        # return Response({'error': json.dumps(payment_intent)})
 
     if event.type == 'checkout.session.completed':
         checkout_session = stripe.checkout.Session.retrieve(
@@ -2038,7 +2038,7 @@ def stripe_webhook(request):
             f"""
             Here is your zoom meeting:
 
-            Start time: {zoom_meeting_data['start_time'].strftime("%m/%d/%Y, %H:%M:%S")}
+            Start time: {zoom_meeting_data['start_time'].strftime("%m/%d/%Y, %H:%M:%S")} UTC
             Duration: {qa_session.minutes}
             Link: {zoom_meeting_data['url']}
             Password: {zoom_meeting_data['password']}
@@ -2057,7 +2057,7 @@ def stripe_webhook(request):
             Here is your zoom meeting for the following question: 
             "{question.body}"
             
-            Start time: {zoom_meeting_data['start_time'].strftime("%m/%d/%Y, %H:%M:%S")}
+            Start time: {zoom_meeting_data['start_time'].strftime("%m/%d/%Y, %H:%M:%S")} UTC
             Duration: {qa_session.minutes}
             Link: {zoom_meeting_data['url']}
             Password: {zoom_meeting_data['password']}
