@@ -851,7 +851,7 @@ def check_available_coaches_for_question(request, question_id):
                 start_time__lte=question.initial_delivery_time.time(), end_time__gte=question.initial_delivery_time.time()).exists()
             is_coach_booked_for_this_time = coach.assigned_questions.filter(delivery_time__range=[
                                                                             question.initial_delivery_time, one_hour_after_delivery_time_estimate]).exists()
-            if not is_coach_available_during_that_time:
+            if not is_coach_available_during_that_time or is_coach_booked_for_this_time:
                 available_on_other_times += 1
             if is_coach_available_during_that_time and not is_coach_booked_for_this_time:
                 available_coaches = available_coaches | _coach
