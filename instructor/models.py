@@ -15,12 +15,31 @@ from accounts.models import User
 from subscribers.models import Subscriber
 from expertisefields.models import ExpertiseField
 from common.models import CommonUser, CommonImage
+from babel.numbers import get_currency_precision
 from uuid import uuid4
 import os
 import stripe
 
 
 stripe.api_key = os.environ.get('STRIPE_SECRET_KEY')
+
+
+def money_to_integer(money):
+    return int(
+        money.amount * (
+            10 ** get_currency_precision(money.currency.code)
+        )
+    )
+
+def create_stripe_price(instance):
+    price = stripe.Price.create(
+        unit_amount=money_to_integer(instance.credit),
+        currency=instance.credit.currency.code.lower(),
+        product=instance.product_id,
+    )
+
+    return price
+
 
 class CoachAvatar(CommonImage):
     pass
@@ -49,6 +68,15 @@ class Coach(CommonUser):
 
     def __str__(self):
         return str(self.name)
+
+    def save(self, *args, **kwargs):
+        # price = create_stripe_price(self)
+        # self.price_id = price.id
+
+        # trigger a qa_session save to update qa_session prices and product ids
+        for qa_session in self.qa_sessions.all():
+            qa_session.save()
+        return super().save()
 
 
 class CoachApplication(models.Model):

@@ -99,9 +99,8 @@ class QaSession(models.Model):
         else:
             pass
 
-        if not self.price_id:
-            price = create_stripe_price(self)
-            self.price_id = price.id
+        price = create_stripe_price(self)
+        self.price_id = price.id
         return super().save()
 
 
