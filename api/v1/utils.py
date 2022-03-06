@@ -1,7 +1,7 @@
-from tracemalloc import start
 from ibm_watson import NaturalLanguageUnderstandingV1
 from ibm_cloud_sdk_core.authenticators import IAMAuthenticator
 from ibm_watson.natural_language_understanding_v1 import Features, ClassificationsOptions, CategoriesOptions, KeywordsOptions
+import datetime
 import requests
 import json
 import os
@@ -55,8 +55,8 @@ def extract_tags_from_question(question):
 def create_meeting(start_time, duration, coach):
     meetingdetails = {"topic": "Troosh QA session",
                       "type": 2,
-                      "start_time": start_time,
-                      "duration": str(duration),
+                      "start_time": start_time.isoformat(),
+                      "duration": duration,
                       "timezone": "Europe/London",
                       "agenda": f"Your debug session with {coach.name} is coming right up!",
 
@@ -85,9 +85,11 @@ def create_meeting(start_time, duration, coach):
     y = json.loads(r.text)
     join_URL = y["join_url"]
     meetingPassword = y["password"]
+    start_time = datetime.datetime.strptime(
+        y['start_time'], '%Y-%m-%dT%H:%M:%S%z')
 
     print(
         f'\n here is your zoom meeting link {join_URL} and your \
         password: "{meetingPassword}"\n')
 
-    return {'url': join_URL, 'password': meetingPassword}
+    return {'url': join_URL, 'password': meetingPassword, 'start_time': start_time}

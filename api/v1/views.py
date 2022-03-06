@@ -875,7 +875,7 @@ def check_available_coaches_for_question(request, question_id):
                         available_on_other_times += 1
             else:
                 status = 'error'
-        serializer = serializers.QuestionSerializer(question)
+        # serializer = serializers.QuestionSerializer(question)
     coach_serializer = serializers.CoachSerializer(
         available_coaches, context={'request': request}, many=True)
     return Response({'available_coaches': coach_serializer.data, 'is_weak': is_weak, 'expertise': expertise,
@@ -2027,14 +2027,23 @@ def stripe_webhook(request):
         zoom_meeting_data = create_meeting(
             question.initial_delivery_time, qa_session.minutes, qa_session.coach)
 
+        # also save zoom data in admin
+        question.zoom_link = zoom_meeting_data['url']
+        question.zoom_password = zoom_meeting_data['password']
+        question.save()
+
         # send email to the customer
         send_mail(
             f"Your zoom call with {qa_session.coach.name}",
             f"""
             Here is your zoom meeting:
 
+            Start time: {zoom_meeting_data['start_time'].strftime("%m/%d/%Y, %H:%M:%S")}
+            Duration: {qa_session.minutes}
             Link: {zoom_meeting_data['url']}
             Password: {zoom_meeting_data['password']}
+            
+            For any questions feel free to reply to this email!
             """,
             'beta@troosh.app',
             [customer['email']],
@@ -2045,11 +2054,15 @@ def stripe_webhook(request):
         send_mail(
             f"You got a zoom call coming up!",
             f"""
-            Here is your zoom meeting with the following question: 
+            Here is your zoom meeting for the following question: 
             "{question.body}"
-
+            
+            Start time: {zoom_meeting_data['start_time'].strftime("%m/%d/%Y, %H:%M:%S")}
+            Duration: {qa_session.minutes}
             Link: {zoom_meeting_data['url']}
             Password: {zoom_meeting_data['password']}
+            
+            For any questions feel free to reply to this email!
             """,
             'beta@troosh.app',
             [qa_session.coach.user.email],
