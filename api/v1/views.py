@@ -803,6 +803,7 @@ def create_qa_checkout_session(request):
                 'destination': qa_session.coach.stripe_id,
             },
         },
+        allow_promotion_codes=True,
         success_url=success_url,
         cancel_url=cancel_url
     )
